@@ -18,6 +18,9 @@ import urllib.request
 import uuid
 
 
+OFFICIAL_UPSTREAM_REPOSITORY = "https://github.com/ggml-org/llama.cpp"
+
+
 @dataclass(frozen=True)
 class UpstreamLock:
     repository: str
@@ -48,6 +51,17 @@ def load_lock(path: Path) -> UpstreamLock:
         c not in "0123456789abcdef" for c in lock.archive_sha256
     ):
         raise ValueError("invalid upstream archive SHA-256")
+    if lock.repository.rstrip("/") != OFFICIAL_UPSTREAM_REPOSITORY:
+        raise ValueError(
+            f"official upstream repository must be {OFFICIAL_UPSTREAM_REPOSITORY}"
+        )
+    canonical_archive = (
+        f"{OFFICIAL_UPSTREAM_REPOSITORY}/archive/refs/tags/{lock.tag}.tar.gz"
+    )
+    if lock.archive_url != canonical_archive:
+        raise ValueError(
+            f"upstream archive URL must be the tag archive: {canonical_archive}"
+        )
     return lock
 
 
@@ -219,6 +233,12 @@ def compare_trees(expected: Path, actual: Path) -> list[str]:
         f"changed: {name}"
         for name in expected_files.keys() & actual_files.keys()
         if sha256_file(expected_files[name]) != sha256_file(actual_files[name])
+    )
+    changes.extend(
+        f"mode changed: {name}"
+        for name in expected_files.keys() & actual_files.keys()
+        if bool(expected_files[name].stat().st_mode & 0o111)
+        != bool(actual_files[name].stat().st_mode & 0o111)
     )
     changes.extend(f"removed: {name}" for name in expected_files.keys() - actual_files.keys())
     return sorted(changes)

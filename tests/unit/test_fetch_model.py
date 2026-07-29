@@ -7,6 +7,7 @@ import importlib.util
 import io
 import tempfile
 import unittest
+import urllib.error
 from pathlib import Path
 from unittest import mock
 
@@ -110,9 +111,9 @@ class TestFetchModel(unittest.TestCase):
         with mock.patch.object(
             fetch_model.urllib.request,
             "urlopen",
-            side_effect=OSError("network down"),
+            side_effect=urllib.error.URLError("network down"),
         ):
-            with self.assertRaisesRegex(OSError, "network down"):
+            with self.assertRaisesRegex(urllib.error.URLError, "network down"):
                 self.fetch(
                     output,
                     url="https://example.invalid/model.gguf",
@@ -126,7 +127,10 @@ class TestFetchModel(unittest.TestCase):
         with mock.patch.object(
             fetch_model.urllib.request,
             "urlopen",
-            side_effect=[OSError("TLS EOF"), io.BytesIO(self.payload)],
+            side_effect=[
+                urllib.error.URLError("TLS EOF"),
+                io.BytesIO(self.payload),
+            ],
         ) as urlopen, mock.patch.object(fetch_model.time, "sleep") as sleep:
             self.fetch(output, url="https://example.invalid/model.gguf")
 
@@ -134,6 +138,21 @@ class TestFetchModel(unittest.TestCase):
         sleep.assert_called_once()
         self.assertEqual(output.read_bytes(), self.payload)
         self.assertEqual(list(self.root.glob(".model.gguf.*.tmp")), [])
+
+    def test_does_not_retry_stable_http_client_error(self):
+        output = self.root / "model.gguf"
+        error = urllib.error.HTTPError(
+            "https://example.invalid/model.gguf", 404, "Not Found", {}, None
+        )
+        self.addCleanup(error.close)
+        with mock.patch.object(
+            fetch_model.urllib.request, "urlopen", side_effect=error
+        ) as urlopen, mock.patch.object(fetch_model.time, "sleep") as sleep:
+            with self.assertRaises(urllib.error.HTTPError):
+                self.fetch(output, url="https://example.invalid/model.gguf")
+
+        self.assertEqual(urlopen.call_count, 1)
+        sleep.assert_not_called()
 
     def test_rejects_response_larger_than_pinned_size(self):
         output = self.root / "model.gguf"

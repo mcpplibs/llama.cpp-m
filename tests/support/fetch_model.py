@@ -3,9 +3,11 @@
 import argparse
 import hashlib
 import os
+import ssl
 import sys
 import tempfile
 import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -20,6 +22,15 @@ _MODEL_SHA256 = "66967fbece6dbe97886593fdbb73589584927e29119ec31f08090732d186173
 _DOWNLOAD_TIMEOUT = 60
 _DOWNLOAD_ATTEMPTS = 3
 _RETRY_DELAY_SECONDS = 1
+
+
+def _is_transient_network_error(error: OSError) -> bool:
+    if isinstance(error, urllib.error.HTTPError):
+        return error.code in (408, 429) or 500 <= error.code < 600
+    return isinstance(
+        error,
+        (urllib.error.URLError, TimeoutError, ConnectionError, ssl.SSLError),
+    )
 
 
 def sha256_file(path: str) -> str:
@@ -100,7 +111,10 @@ def fetch(
                 os.close(descriptor)
             if os.path.isfile(temporary):
                 os.unlink(temporary)
-            if attempt == _DOWNLOAD_ATTEMPTS:
+            if (
+                attempt == _DOWNLOAD_ATTEMPTS
+                or not _is_transient_network_error(error)
+            ):
                 raise
             print(
                 f"Download failed: {error}; retrying",

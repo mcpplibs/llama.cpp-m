@@ -131,6 +131,40 @@ class ImportUpstreamTest(unittest.TestCase):
             ["added: added.txt", "changed: changed.txt", "removed: removed.txt"],
         )
 
+    def test_check_mode_detects_executable_bit_drift(self):
+        expected = self.root / "expected"
+        actual = self.root / "actual"
+        expected.mkdir()
+        actual.mkdir()
+        expected_file = expected / "tool.sh"
+        actual_file = actual / "tool.sh"
+        expected_file.write_text("#!/bin/sh\n", encoding="utf-8")
+        actual_file.write_text("#!/bin/sh\n", encoding="utf-8")
+        os.chmod(expected_file, 0o755)
+        os.chmod(actual_file, 0o644)
+
+        self.assertEqual(
+            import_upstream.compare_trees(expected, actual),
+            ["mode changed: tool.sh"],
+        )
+
+    def test_load_lock_rejects_upstream_fork(self):
+        lock = self.root / "upstream.lock"
+        lock.write_text(
+            """[upstream]
+repository = "https://github.com/example/llama.cpp"
+tag = "b10069"
+commit = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+archive_url = "https://github.com/example/llama.cpp/archive/refs/tags/b10069.tar.gz"
+archive_sha256 = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+imported_at_utc = "2026-07-29T00:00:00Z"
+""",
+            encoding="utf-8",
+        )
+
+        with self.assertRaisesRegex(ValueError, "official upstream repository"):
+            import_upstream.load_lock(lock)
+
     def test_check_mode_reports_drift_without_modifying_destination(self):
         archive = self.root / "source.tar.gz"
         make_archive(archive, {"project-v1/file.txt": b"official"})

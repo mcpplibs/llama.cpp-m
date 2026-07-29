@@ -11,7 +11,7 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 if str(REPOSITORY_ROOT) not in sys.path:
     sys.path.insert(0, str(REPOSITORY_ROOT))
 
-from tools.import_upstream import load_lock
+from tools.import_upstream import OFFICIAL_UPSTREAM_REPOSITORY, load_lock
 
 
 class Version(NamedTuple):
@@ -72,6 +72,10 @@ def _identity_from_text(manifest_text: str, lock_text: str, tag: str) -> Release
     if tag != f"v{identity.version}":
         raise ValueError(
             f"release tag {tag} does not match package version {identity.version}"
+        )
+    if identity.upstream_repository != OFFICIAL_UPSTREAM_REPOSITORY:
+        raise ValueError(
+            f"official upstream repository must be {OFFICIAL_UPSTREAM_REPOSITORY}"
         )
     canonical_archive = (
         f"{identity.upstream_repository}/archive/refs/tags/"
@@ -217,6 +221,10 @@ def _previous_identity(
             version = Version.parse(tag.removeprefix("v"))
         except ValueError:
             continue
+        if version > current.version:
+            raise ValueError(f"newer release already exists: {tag}")
+        if version == current.version:
+            raise ValueError(f"release version already exists under tag {tag}")
         if version < current.version:
             identity = _tag_identity(root, tag)
             if identity:

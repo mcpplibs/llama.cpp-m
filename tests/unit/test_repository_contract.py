@@ -126,10 +126,13 @@ class RepositoryContractTest(unittest.TestCase):
             "fetch-depth: 0",
             "python3 -m unittest discover",
             "tools/check_release.py",
-            "check-runs",
+            "actions/workflows/ci.yml/runs",
+            "tools/check_ci_run.py",
             "gh release create",
         ):
             self.assertIn(marker, release)
+        self.assertIn("actions: read", release)
+        self.assertNotIn("check-runs", release)
         self.assertNotIn("upload-release-asset", release)
 
 

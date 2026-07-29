@@ -340,7 +340,10 @@ endfunction()
         with tarfile.open(archive, 'w:gz') as tf:
             tf.add(self.root, arcname='llama.cpp-test')
         digest = audit_snapshot.sha256_file(archive)
-        url = archive.as_uri()
+        url = (
+            "https://github.com/ggml-org/llama.cpp/"
+            "archive/refs/tags/test.tar.gz"
+        )
         report = audit_snapshot.collect_snapshot(
             self.root,
             tag='test',
@@ -354,7 +357,7 @@ endfunction()
         lock_path = Path(fixture_dir.name) / 'upstream.lock'
         lock_path.write_text(
             '[upstream]\n'
-            'repository = "https://github.com/example/project"\n'
+            'repository = "https://github.com/ggml-org/llama.cpp"\n'
             f'tag = "{report["upstream"]["tag"]}"\n'
             f'commit = "{report["upstream"]["commit"]}"\n'
             f'archive_url = "{report["upstream"]["url"]}"\n'

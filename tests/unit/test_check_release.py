@@ -64,6 +64,19 @@ class CheckReleaseTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "archive URL"):
             check_release.load_identity(self.root, "v0.1.0")
 
+    def test_rejects_consistent_mapping_to_upstream_fork(self):
+        lock = self.root / "upstream.lock"
+        lock.write_text(
+            lock.read_text(encoding="utf-8").replace(
+                "https://github.com/ggml-org/llama.cpp",
+                "https://github.com/example/llama.cpp",
+            ),
+            encoding="utf-8",
+        )
+
+        with self.assertRaisesRegex(ValueError, "official upstream repository"):
+            check_release.load_identity(self.root, "v0.1.0")
+
     def test_changed_existing_tag_mapping_fails(self):
         current = check_release.load_identity(self.root, "v0.1.0")
         existing = current._replace(upstream_commit="f" * 40)
@@ -104,6 +117,26 @@ class CheckReleaseTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "minor"):
             check_release.validate_version_transition(previous, patch)
         check_release.validate_version_transition(previous, minor)
+
+    def test_rejects_candidate_older_than_an_existing_release(self):
+        current = check_release.ReleaseIdentity.for_test("0.1.1", "b10069")
+        higher = check_release.ReleaseIdentity.for_test("0.2.0", "b10123")
+        lower = check_release.ReleaseIdentity.for_test("0.1.0", "b10069")
+        tags = subprocess.CompletedProcess(
+            [], 0, stdout="v0.2.0\nv0.1.0\n", stderr=""
+        )
+
+        with mock.patch.object(check_release, "_git", return_value=tags):
+            with mock.patch.object(
+                check_release,
+                "_tag_identity",
+                side_effect=lambda _root, tag: {
+                    "v0.2.0": higher,
+                    "v0.1.0": lower,
+                }[tag],
+            ):
+                with self.assertRaisesRegex(ValueError, "newer release already exists"):
+                    check_release._previous_identity(self.root, current, "v0.1.1")
 
     def test_vendored_source_rejects_git_metadata_and_submodules(self):
         check_release.validate_vendor_boundary(self.root)

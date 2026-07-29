@@ -11,7 +11,7 @@ jobs:
   verify:
     runs-on: ubuntu-24.04
     permissions:
-      checks: read
+      actions: read
       contents: read
     outputs:
       mapping: ${{ steps.contract.outputs.mapping }}
@@ -34,17 +34,17 @@ jobs:
           mapping=$(python3 tools/check_release.py --tag "${GITHUB_REF_NAME}" | tail -n 1)
           echo "${mapping}"
           echo "mapping=${mapping}" >> "${GITHUB_OUTPUT}"
-      - name: Require successful CI checks for the tag commit
+      - name: Require latest successful CI run for the tag commit
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          output="${RUNNER_TEMP}/check-runs.json"
+          output="${RUNNER_TEMP}/ci-runs.json"
           downloaded=0
           for attempt in 1 2 3 4 5; do
             if gh api \
-              "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/check-runs?per_page=100" \
+              "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs?head_sha=${GITHUB_SHA}&per_page=100" \
               > "${output}"; then
               downloaded=1
               break
@@ -52,33 +52,10 @@ jobs:
             if [[ "${attempt}" -lt 5 ]]; then sleep $((attempt * 2)); fi
           done
           if [[ "${downloaded}" -ne 1 ]]; then
-            echo "failed to query CI checks after 5 attempts"
+            echo "failed to query CI workflow runs after 5 attempts"
             exit 1
           fi
-          python3 - "${output}" <<'PY'
-          import json
-          from pathlib import Path
-          import sys
-
-          required = {
-              "unit-and-import",
-              "cpu (ubuntu-24.04)",
-              "cpu (windows-latest)",
-              "cpu (macos-15)",
-              "linux-arm64",
-              "metal",
-              "release-contract",
-          }
-          data = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
-          successful = {
-              run["name"]
-              for run in data.get("check_runs", [])
-              if run.get("status") == "completed" and run.get("conclusion") == "success"
-          }
-          missing = sorted(required - successful)
-          if missing:
-              raise SystemExit("required successful checks missing: " + ", ".join(missing))
-          PY
+          python3 tools/check_ci_run.py --runs "${output}" --sha "${GITHUB_SHA}"
 
   publish:
     needs: verify
