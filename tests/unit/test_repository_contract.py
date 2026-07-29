@@ -81,6 +81,29 @@ class RepositoryContractTest(unittest.TestCase):
             )
             self.assertIn("return exit_code;", source)
 
+    def test_ci_covers_supported_platform_and_runtime_boundaries(self):
+        workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text(
+            encoding="utf-8"
+        )
+        for marker in (
+            "ubuntu-24.04",
+            "ubuntu-24.04-arm",
+            "windows-latest",
+            "macos-15",
+            "LLAMACPP_CPU_TEST=PASS",
+            "LLAMACPP_METAL_TEST=PASS",
+            "build.mcpp.bin",
+            "PT_INTERP",
+            "compile_commands.json",
+        ):
+            self.assertIn(marker, workflow)
+
+        self.assertIn("mirrors.ustc.edu.cn/ubuntu-ports", workflow)
+        self.assertIn("--retry 5 --retry-all-errors", workflow)
+        self.assertIn("MCPP_VENDORED_XLINGS", workflow)
+        self.assertNotIn("set -o pipefail", workflow)
+        self.assertGreaterEqual(workflow.count("set -euo pipefail"), 5)
+
 
 if __name__ == "__main__":
     unittest.main()
