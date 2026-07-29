@@ -66,6 +66,10 @@ class RepositoryContractTest(unittest.TestCase):
 
         self.assertIn("has_positive_metal_model_buffer(logs)", source)
         self.assertIn("has_positive_metal_compute_buffer(logs)", source)
+        self.assertIn(
+            "model_params.n_gpu_layers = std::numeric_limits<int>::max();",
+            source,
+        )
 
     def test_chat_cpu_exposes_only_the_cpu_backend(self):
         source = (

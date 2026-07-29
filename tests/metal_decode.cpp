@@ -167,7 +167,7 @@ int main() {
     logs.clear();
 
     llama_model_params model_params = llama_model_default_params();
-    model_params.n_gpu_layers = 1;
+    model_params.n_gpu_layers = std::numeric_limits<int>::max();
     llama_model * model = llama_model_load_from_file(model_path, model_params);
     if (!model) {
         llama_backend_free();
