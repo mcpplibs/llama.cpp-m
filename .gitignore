@@ -1,0 +1,5 @@
+.mcpp/
+target/
+__pycache__/
+*.pyc
+models/
