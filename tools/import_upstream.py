@@ -140,12 +140,16 @@ def _github_repository(repository: str) -> tuple[str, str]:
 
 
 def _github_json(url: str) -> dict:
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "llama.cpp-m-importer",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    if token := os.environ.get("GITHUB_TOKEN"):
+        headers["Authorization"] = f"Bearer {token}"
     request = urllib.request.Request(
         url,
-        headers={
-            "Accept": "application/vnd.github+json",
-            "User-Agent": "llama.cpp-m-importer",
-        },
+        headers=headers,
     )
     with urllib.request.urlopen(request, timeout=30) as response:
         return json.loads(response.read())

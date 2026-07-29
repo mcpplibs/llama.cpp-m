@@ -1,6 +1,7 @@
 import hashlib
 import io
 import json
+import os
 from pathlib import Path
 import tarfile
 import tempfile
@@ -174,6 +175,28 @@ class ImportUpstreamTest(unittest.TestCase):
 
         self.assertEqual(commit, "d" * 40)
         self.assertEqual(urlopen.call_count, 2)
+
+    def test_github_requests_use_token_when_available(self):
+        response = mock.MagicMock()
+        response.__enter__.return_value.read.return_value = json.dumps(
+            {"object": {"type": "commit", "sha": "e" * 40}}
+        ).encode()
+        captured_request = None
+
+        def open_request(request, timeout):
+            nonlocal captured_request
+            captured_request = request
+            return response
+
+        with mock.patch.dict(os.environ, {"GITHUB_TOKEN": "test-token"}):
+            with mock.patch("urllib.request.urlopen", side_effect=open_request):
+                import_upstream.resolve_tag_commit(
+                    "https://github.com/example/project", "v1.0.0"
+                )
+
+        self.assertEqual(
+            captured_request.get_header("Authorization"), "Bearer test-token"
+        )
 
 
 if __name__ == "__main__":
