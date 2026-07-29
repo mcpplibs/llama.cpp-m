@@ -17,6 +17,8 @@ def classify_api_drift(previous: dict, current: dict) -> dict:
     current_declarations = current.get("declarations", {})
     previous_macros = previous.get("macros", {})
     current_macros = current.get("macros", {})
+    previous_typed_constants = previous.get("typed_constants", {})
+    current_typed_constants = current.get("typed_constants", {})
     removed_declarations = sorted(
         previous_declarations.keys() - current_declarations.keys()
     )
@@ -43,19 +45,38 @@ def classify_api_drift(previous: dict, current: dict) -> dict:
             for name in previous_macros.keys() | current_macros.keys()
             if previous_macros.get(name) != current_macros.get(name)
         ),
+        "added_typed_constants": sorted(
+            current_typed_constants.keys() - previous_typed_constants.keys()
+        ),
+        "removed_typed_constants": sorted(
+            previous_typed_constants.keys() - current_typed_constants.keys()
+        ),
+        "changed_typed_constants": sorted(
+            name
+            for name in previous_typed_constants.keys()
+            & current_typed_constants.keys()
+            if previous_typed_constants[name] != current_typed_constants[name]
+        ),
         "manual_decisions": sorted(set(current.get("manual_decisions", []))),
     }
 
 
 def require_breaking_api_acceptance(report: dict, acceptance: Path | None) -> None:
-    breaking = report.get("removed_declarations", []) or report.get(
-        "changed_declarations", []
+    breaking = any(
+        report.get(key, [])
+        for key in (
+            "removed_declarations",
+            "changed_declarations",
+            "removed_typed_constants",
+            "changed_typed_constants",
+        )
     )
     if not breaking:
         return
     if acceptance is None:
         raise ValueError(
-            "removed or changed declarations require --accept-breaking-api"
+            "removed or changed declarations or typed constants require "
+            "--accept-breaking-api"
         )
     try:
         accepted = json.loads(acceptance.read_text(encoding="utf-8"))
@@ -378,7 +399,9 @@ def collect_snapshot(
     for hdr in [
             'include/llama.h',
             'ggml/include/ggml.h',
-            'ggml/include/ggml-cpu.h']:
+            'ggml/include/ggml-cpu.h',
+            'ggml/include/ggml-backend.h',
+            'ggml/include/ggml-alloc.h']:
         p = os.path.join(root, hdr)
         if os.path.isfile(p):
             header_hashes[hdr] = sha256_file(p)
@@ -429,13 +452,14 @@ def compare_reports(old: dict, new: dict) -> list[str]:
 def check_exports(root: str, output_dir: Path) -> int:
     from gen_exports import generate_exports, sync_outputs
 
-    llama_inc, ggml_inc, skipped_txt = generate_exports(root)
+    llama_inc, ggml_inc, skipped_txt, typed_constants = generate_exports(root)
     return sync_outputs(
         output_dir,
         {
             'llama.inc': llama_inc,
             'required_ggml.inc': ggml_inc,
             'llama.skipped.txt': skipped_txt,
+            'typed_constants.inc': typed_constants,
         },
         True,
     )

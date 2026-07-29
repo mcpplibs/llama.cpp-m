@@ -43,6 +43,21 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_UPSTREAM_DIR = ROOT / "third_party/llama.cpp"
 DEFAULT_OUTPUT_DIR = ROOT / "src/gen_exports"
 NON_API_LLAMA_MACROS = {"LLAMA_API", "LLAMA_H"}
+TYPED_LLAMA_CONSTANTS = {
+    "LLAMA_DEFAULT_SEED": "uint32_t",
+    "LLAMA_TOKEN_NULL": "llama_token",
+    "LLAMA_FILE_MAGIC_GGLA": "uint32_t",
+    "LLAMA_FILE_MAGIC_GGSN": "uint32_t",
+    "LLAMA_FILE_MAGIC_GGSQ": "uint32_t",
+    "LLAMA_SESSION_MAGIC": "uint32_t",
+    "LLAMA_SESSION_VERSION": "uint32_t",
+    "LLAMA_STATE_SEQ_MAGIC": "uint32_t",
+    "LLAMA_STATE_SEQ_VERSION": "uint32_t",
+    "LLAMA_STATE_SEQ_FLAGS_NONE": "llama_state_seq_flags",
+    "LLAMA_STATE_SEQ_FLAGS_SWA_ONLY": "llama_state_seq_flags",
+    "LLAMA_STATE_SEQ_FLAGS_PARTIAL_ONLY": "llama_state_seq_flags",
+    "LLAMA_STATE_SEQ_FLAGS_ON_DEVICE": "llama_state_seq_flags",
+}
 
 
 def _find_clang():
@@ -241,46 +256,7 @@ def _resolved_enum_values(ast_data):
     return values
 
 
-def collect_api_snapshot(upstream_dir, include_dirs=None):
-    ast_data, macro_output, llama_lines = _scan_headers(
-        upstream_dir, include_dirs
-    )
-    declarations = {}
-    complete_records = set()
-    enum_values = _resolved_enum_values(ast_data)
-
-    def walk(node):
-        if not isinstance(node, dict):
-            return
-        kind = node.get("kind", "")
-        name = node.get("name", "")
-        type_name = node.get("type", {}).get("qualType", "")
-        if (kind in ("FunctionDecl", "CXXMethodDecl")
-                and name.startswith("llama_")
-                and "LLAMA_API" in _node_line(node, llama_lines)):
-            declarations[name] = f"{kind}:{type_name}"
-        elif (kind in ("RecordDecl", "CXXRecordDecl")
-              and name.startswith("llama_")):
-            if node.get("completeDefinition"):
-                declarations[name] = f"{kind}:{_record_fingerprint(node)}"
-                complete_records.add(name)
-            elif name not in complete_records and not node.get("isImplicit"):
-                declarations[name] = f"{kind}:{_record_fingerprint(node)}"
-        elif (kind in ("TypedefDecl", "ClassTemplateDecl", "EnumDecl")
-              and name.startswith("llama_")):
-            if kind != "TypedefDecl" or name not in complete_records:
-                declarations[name] = f"{kind}:{type_name or name}"
-        elif kind == "EnumConstantDecl" and name.startswith("LLAMA_"):
-            declarations[name] = f"{kind}:{type_name}:{enum_values[name]}"
-        for child in node.get("inner", []):
-            walk(child)
-
-    if isinstance(ast_data, dict):
-        walk(ast_data)
-    else:
-        for node in ast_data:
-            walk(node)
-
+def _object_macros(macro_output):
     macros = {}
     manual_decisions = set()
     for line in macro_output.splitlines():
@@ -292,11 +268,103 @@ def collect_api_snapshot(upstream_dir, include_dirs=None):
             manual_decisions.add(token.split("(", 1)[0])
         elif token not in NON_API_LLAMA_MACROS:
             macros[token] = value.strip()
+    return macros, manual_decisions
+
+
+def _expand_macro(name, macros, stack=()):
+    if name in stack:
+        raise RuntimeError(f"cyclic public macro definition: {name}")
+    if name not in macros:
+        raise RuntimeError(f"required public macro is missing: {name}")
+    value = macros[name]
+
+    def replace(match):
+        dependency = match.group(0)
+        if dependency not in macros:
+            return dependency
+        return _expand_macro(dependency, macros, (*stack, name))
+
+    return re.sub(r"\bLLAMA_[A-Z0-9_]+\b", replace, value)
+
+
+def _typed_constant_snapshot(macros):
+    return {
+        name: f"{type_name}:{_expand_macro(name, macros)}"
+        for name, type_name in TYPED_LLAMA_CONSTANTS.items()
+    }
+
+
+def _generate_typed_constants(macros):
+    lines = []
+    for name, type_name in TYPED_LLAMA_CONSTANTS.items():
+        value = _expand_macro(name, macros)
+        if type_name == "llama_state_seq_flags":
+            value = f"static_cast<{type_name}>({value})"
+        lines.append(f"export inline constexpr {type_name} {name} = {value};")
+    return "\n".join(lines) + "\n"
+
+
+def collect_api_snapshot(upstream_dir, include_dirs=None):
+    ast_data, macro_output, llama_lines = _scan_headers(
+        upstream_dir, include_dirs
+    )
+    declarations = {}
+    complete_records = set()
+    enum_values = _resolved_enum_values(ast_data)
+    ggml_enum_members = set()
+
+    def walk(node):
+        if not isinstance(node, dict):
+            return
+        kind = node.get("kind", "")
+        name = node.get("name", "")
+        type_name = node.get("type", {}).get("qualType", "")
+        if kind == "EnumDecl" and name in GGML_ENUM_TYPES:
+            ggml_enum_members.update(
+                child.get("name", "")
+                for child in node.get("inner", [])
+                if child.get("kind") == "EnumConstantDecl"
+            )
+        if (kind in ("FunctionDecl", "CXXMethodDecl")
+                and name.startswith("llama_")
+                and "LLAMA_API" in _node_line(node, llama_lines)):
+            declarations[name] = f"{kind}:{type_name}"
+        elif (kind in ("FunctionDecl", "CXXMethodDecl")
+              and name in REQUIRED_GGML_FUNCTIONS):
+            declarations[name] = f"{kind}:{type_name}"
+        elif (kind in ("RecordDecl", "CXXRecordDecl")
+              and (name.startswith("llama_") or name in REQUIRED_GGML_TYPES)):
+            if node.get("completeDefinition"):
+                declarations[name] = f"{kind}:{_record_fingerprint(node)}"
+                complete_records.add(name)
+            elif name not in complete_records and not node.get("isImplicit"):
+                declarations[name] = f"{kind}:{_record_fingerprint(node)}"
+        elif (kind in ("TypedefDecl", "ClassTemplateDecl", "EnumDecl")
+              and (name.startswith("llama_") or name in REQUIRED_GGML_TYPES)):
+            if kind != "TypedefDecl" or name not in complete_records:
+                declarations[name] = f"{kind}:{type_name or name}"
+        elif kind == "EnumConstantDecl" and name.startswith("LLAMA_"):
+            declarations[name] = f"{kind}:{type_name}:{enum_values[name]}"
+        elif (kind == "EnumConstantDecl"
+              and (name in REQUIRED_GGML_ENUM_MEMBERS
+                   or name in ggml_enum_members)):
+            declarations[name] = f"{kind}:{type_name}:{enum_values[name]}"
+        for child in node.get("inner", []):
+            walk(child)
+
+    if isinstance(ast_data, dict):
+        walk(ast_data)
+    else:
+        for node in ast_data:
+            walk(node)
+
+    macros, manual_decisions = _object_macros(macro_output)
 
     return {
         "declarations": dict(sorted(declarations.items())),
         "macros": dict(sorted(macros.items())),
         "manual_decisions": sorted(manual_decisions),
+        "typed_constants": _typed_constant_snapshot(macros),
     }
 
 
@@ -413,9 +481,11 @@ def generate_exports(upstream_dir, include_dirs=None):
             + ", ".join(missing_ggml)
         )
 
+    macros, _ = _object_macros(macro_output)
     return ("\n".join(llama_exports) + "\n",
             "\n".join(ggml_exports) + "\n",
-            "\n".join(skipped) + "\n")
+            "\n".join(skipped) + "\n",
+            _generate_typed_constants(macros))
 
 
 def sync_outputs(output_dir, outputs, check):
@@ -458,12 +528,13 @@ def main(argv=None):
         )
         return 1
 
-    llama_inc, ggml_inc, skipped_txt = generate_exports(upstream)
+    llama_inc, ggml_inc, skipped_txt, typed_constants = generate_exports(upstream)
 
     outputs = {
         "llama.inc": llama_inc,
         "required_ggml.inc": ggml_inc,
         "llama.skipped.txt": skipped_txt,
+        "typed_constants.inc": typed_constants,
     }
     return sync_outputs(args.output_dir or DEFAULT_OUTPUT_DIR, outputs, args.check)
 

@@ -68,6 +68,19 @@ LLAMA_API void llama_live(struct llama_model *);
 DEPRECATED(LLAMA_API void llama_legacy(struct llama_model *), "use llama_live");
 #define LLAMA_NUMBER 7
 #define LLAMA_FUNCTION_LIKE_MACRO(value) ((value) + 1)
+#define LLAMA_DEFAULT_SEED 0xFFFFFFFF
+#define LLAMA_TOKEN_NULL -1
+#define LLAMA_FILE_MAGIC_GGLA 0x67676c61u
+#define LLAMA_FILE_MAGIC_GGSN 0x6767736eu
+#define LLAMA_FILE_MAGIC_GGSQ 0x67677371u
+#define LLAMA_SESSION_MAGIC LLAMA_FILE_MAGIC_GGSN
+#define LLAMA_SESSION_VERSION 9
+#define LLAMA_STATE_SEQ_MAGIC LLAMA_FILE_MAGIC_GGSQ
+#define LLAMA_STATE_SEQ_VERSION 2
+#define LLAMA_STATE_SEQ_FLAGS_NONE 0
+#define LLAMA_STATE_SEQ_FLAGS_SWA_ONLY 1
+#define LLAMA_STATE_SEQ_FLAGS_PARTIAL_ONLY 1
+#define LLAMA_STATE_SEQ_FLAGS_ON_DEVICE 2
 """
             )
         os.makedirs(os.path.join(self.root, "ggml", "include"))
@@ -120,7 +133,7 @@ struct ggml_backend_buffer * ggml_backend_alloc_ctx_tensors(
         self.tmp.cleanup()
 
     def test_generate_exports_finds_llama_types(self):
-        llama, _, _ = gen_exports.generate_exports(
+        llama, _, _, _ = gen_exports.generate_exports(
             upstream_dir=self.root,
             include_dirs=[
                 os.path.join(self.root, "include"),
@@ -132,7 +145,7 @@ struct ggml_backend_buffer * ggml_backend_alloc_ctx_tensors(
         self.assertIn("export using ::LLAMA_MODE_A;", llama)
 
     def test_generate_exports_includes_deprecated_llama_api(self):
-        llama, _, skipped = gen_exports.generate_exports(
+        llama, _, skipped, _ = gen_exports.generate_exports(
             upstream_dir=self.root,
             include_dirs=[
                 os.path.join(self.root, "include"),
@@ -159,6 +172,51 @@ struct ggml_backend_buffer * ggml_backend_alloc_ctx_tensors(
         self.assertEqual(
             api["manual_decisions"], ["LLAMA_FUNCTION_LIKE_MACRO"]
         )
+
+    def test_collect_api_snapshot_records_exported_ggml_signatures(self):
+        before = gen_exports.collect_api_snapshot(
+            upstream_dir=self.root,
+            include_dirs=[
+                os.path.join(self.root, "include"),
+                os.path.join(self.root, "ggml", "include"),
+            ],
+        )
+        self.assertIn("ggml_backend_reg_by_name", before["declarations"])
+
+        backend = Path(self.root) / "ggml/include/ggml-backend.h"
+        backend.write_text(
+            backend.read_text(encoding="utf-8").replace(
+                "ggml_backend_reg_by_name(const char *);",
+                "ggml_backend_reg_by_name(const char *, int);",
+            ),
+            encoding="utf-8",
+        )
+        after = gen_exports.collect_api_snapshot(
+            upstream_dir=self.root,
+            include_dirs=[
+                os.path.join(self.root, "include"),
+                os.path.join(self.root, "ggml", "include"),
+            ],
+        )
+
+        self.assertNotEqual(
+            before["declarations"]["ggml_backend_reg_by_name"],
+            after["declarations"]["ggml_backend_reg_by_name"],
+        )
+
+    def test_main_generates_typed_constant_replacements(self):
+        output = Path(self.root) / "generated"
+        result = gen_exports.main(
+            ["--upstream", self.root, "--output-dir", str(output)]
+        )
+
+        self.assertEqual(result, 0)
+        generated = output / "typed_constants.inc"
+        self.assertTrue(generated.is_file())
+        content = generated.read_text(encoding="utf-8")
+        self.assertIn("LLAMA_DEFAULT_SEED = 0xFFFFFFFF", content)
+        self.assertIn("LLAMA_SESSION_MAGIC = 0x6767736eu", content)
+        self.assertIn("LLAMA_STATE_SEQ_FLAGS_ON_DEVICE", content)
 
     def test_collect_api_snapshot_tracks_struct_field_layout(self):
         before = gen_exports.collect_api_snapshot(
@@ -326,7 +384,7 @@ struct ggml_backend_buffer * ggml_backend_alloc_ctx_tensors(
         )
 
     def test_generate_exports_skips_macros(self):
-        _, _, skipped = gen_exports.generate_exports(
+        _, _, skipped, _ = gen_exports.generate_exports(
             upstream_dir=self.root,
             include_dirs=[
                 os.path.join(self.root, "include"),
@@ -336,7 +394,7 @@ struct ggml_backend_buffer * ggml_backend_alloc_ctx_tensors(
         self.assertIn("LLAMA_NUMBER", skipped)
 
     def test_generate_exports_includes_required_ggml_types(self):
-        _, ggml, _ = gen_exports.generate_exports(
+        _, ggml, _, _ = gen_exports.generate_exports(
             upstream_dir=self.root,
             include_dirs=[
                 os.path.join(self.root, "include"),
@@ -348,7 +406,7 @@ struct ggml_backend_buffer * ggml_backend_alloc_ctx_tensors(
         self.assertIn("export using ::ggml_log_callback;", ggml)
 
     def test_generate_exports_includes_required_backend_api(self):
-        _, ggml, _ = gen_exports.generate_exports(
+        _, ggml, _, _ = gen_exports.generate_exports(
             upstream_dir=self.root,
             include_dirs=[
                 os.path.join(self.root, "include"),
@@ -400,6 +458,9 @@ class TestCheckMode(unittest.TestCase):
         "llama.inc": "export using ::llama_model;\n",
         "required_ggml.inc": "export using ::ggml_context;\n",
         "llama.skipped.txt": "macro LLAMA_API\n",
+        "typed_constants.inc": (
+            "export inline constexpr uint32_t LLAMA_DEFAULT_SEED = 0xFFFFFFFF;\n"
+        ),
     }
 
     def setUp(self):
@@ -434,6 +495,7 @@ class TestCheckMode(unittest.TestCase):
             self.GENERATED["llama.inc"],
             self.GENERATED["required_ggml.inc"],
             self.GENERATED["llama.skipped.txt"],
+            self.GENERATED["typed_constants.inc"],
         )
         stderr = io.StringIO()
         with mock.patch.object(
@@ -481,6 +543,16 @@ class TestCheckMode(unittest.TestCase):
         result, stderr = self.run_check()
         self.assertEqual(result, 1)
         self.assertIn("llama.skipped.txt does not exist", stderr)
+        self.assertEqual(self.snapshot(), before)
+
+    def test_check_requires_typed_constants_without_writing(self):
+        self.write_outputs(
+            ["llama.inc", "required_ggml.inc", "llama.skipped.txt"]
+        )
+        before = self.snapshot()
+        result, stderr = self.run_check()
+        self.assertEqual(result, 1)
+        self.assertIn("typed_constants.inc does not exist", stderr)
         self.assertEqual(self.snapshot(), before)
 
 

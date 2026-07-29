@@ -100,6 +100,27 @@ class TestApiDrift(unittest.TestCase):
                     later_report, acceptance
                 )
 
+    def test_typed_constant_change_requires_breaking_acceptance(self):
+        previous = {
+            "declarations": {},
+            "macros": {},
+            "manual_decisions": [],
+            "typed_constants": {"LLAMA_DEFAULT_SEED": "uint32_t:1"},
+        }
+        current = {
+            **previous,
+            "typed_constants": {"LLAMA_DEFAULT_SEED": "uint32_t:2"},
+        }
+
+        report = audit_snapshot.classify_api_drift(previous, current)
+
+        self.assertIn("changed_typed_constants", report)
+        self.assertEqual(
+            report["changed_typed_constants"], ["LLAMA_DEFAULT_SEED"]
+        )
+        with self.assertRaisesRegex(ValueError, "typed constants"):
+            audit_snapshot.require_breaking_api_acceptance(report, None)
+
 
 class TestExtractCmakeCall(unittest.TestCase):
     """Balanced-paren CMake extraction."""
@@ -220,7 +241,9 @@ endfunction()
         for name, directory in [
                 ('llama.h', 'include'),
                 ('ggml.h', 'ggml/include'),
-                ('ggml-cpu.h', 'ggml/include')]:
+                ('ggml-cpu.h', 'ggml/include'),
+                ('ggml-backend.h', 'ggml/include'),
+                ('ggml-alloc.h', 'ggml/include')]:
             with open(os.path.join(self.root, directory, name), 'w') as f:
                 f.write(f'/* {name} placeholder */\n')
 
@@ -276,7 +299,13 @@ endfunction()
         self.assertIn('ggml/src/ggml-metal/ggml-metal-impl.h', report['metal']['shader_inputs'])
         self.assertEqual(
             set(report['public_header_sha256']),
-            {'include/llama.h', 'ggml/include/ggml.h', 'ggml/include/ggml-cpu.h'},
+            {
+                'include/llama.h',
+                'ggml/include/ggml.h',
+                'ggml/include/ggml-cpu.h',
+                'ggml/include/ggml-backend.h',
+                'ggml/include/ggml-alloc.h',
+            },
         )
         self.assertEqual(report['api'], self.API)
 
@@ -285,7 +314,12 @@ endfunction()
 
         checker = getattr(audit_snapshot, 'check_exports', None)
         self.assertIsNotNone(checker)
-        generated = ('llama exports\n', 'ggml exports\n', 'skipped\n')
+        generated = (
+            'llama exports\n',
+            'ggml exports\n',
+            'skipped\n',
+            'typed constants\n',
+        )
         output_dir = Path(self.root) / 'exports'
         with mock.patch.object(
                 gen_exports, 'generate_exports', return_value=generated) as generate, \
@@ -299,6 +333,7 @@ endfunction()
                 'llama.inc': generated[0],
                 'required_ggml.inc': generated[1],
                 'llama.skipped.txt': generated[2],
+                'typed_constants.inc': generated[3],
             },
             True,
         )
