@@ -1,0 +1,11 @@
+[package]
+name = "chat-metal"
+version = "0.1.0"
+standard = "c++23"
+
+[targets.chat-metal]
+kind = "bin"
+main = "src/main.cpp"
+
+[dependencies]
+llamacpp = { path = "../..", features = ["backend-metal"] }

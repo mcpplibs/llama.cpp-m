@@ -1,0 +1,254 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  MCPP_VERSION: "2026.7.28.2"
+  MCPP_RELEASE_BASE: https://github.com/mcpp-community/mcpp/releases/download
+
+jobs:
+  unit-and-import:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install pinned mcpp
+        shell: bash
+        run: |
+          set -euo pipefail
+          asset="mcpp-${MCPP_VERSION}-linux-x86_64.tar.gz"
+          wrapper="${asset%.tar.gz}"
+          url="${MCPP_RELEASE_BASE}/v${MCPP_VERSION}/${asset}"
+          curl --fail --location --retry 5 --retry-all-errors \
+            --retry-delay 2 --output "${RUNNER_TEMP}/${asset}" "${url}"
+          curl --fail --location --retry 5 --retry-all-errors \
+            --retry-delay 2 --output "${RUNNER_TEMP}/${asset}.sha256" \
+            "${url}.sha256"
+          (cd "${RUNNER_TEMP}" && sha256sum -c "${asset}.sha256")
+          tar -xzf "${RUNNER_TEMP}/${asset}" -C "${RUNNER_TEMP}"
+          echo "${RUNNER_TEMP}/${wrapper}/bin" >> "${GITHUB_PATH}"
+      - name: Unit and repository checks
+        run: python3 -m unittest discover -s tests/unit -p 'test_*.py' -v
+      - name: Verify vendored upstream and generated API
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python3 tools/import_upstream.py --lock upstream.lock --check --verify-tag
+          python3 tools/gen_exports.py --check
+          python3 tools/audit_snapshot.py --check snapshots/b10069.json
+      - name: Cold CPU package build
+        run: |
+          rm -rf target
+          mcpp --version | grep -F "${MCPP_VERSION}"
+          mcpp build --strict --no-cache
+
+  cpu:
+    name: cpu (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            platform: linux-x86_64
+            format: tar.gz
+          - os: windows-latest
+            platform: windows-x86_64
+            format: zip
+          - os: macos-15
+            platform: macosx-arm64
+            format: tar.gz
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install pinned mcpp (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          asset="mcpp-${MCPP_VERSION}-${{ matrix.platform }}.${{ matrix.format }}"
+          wrapper="mcpp-${MCPP_VERSION}-${{ matrix.platform }}"
+          url="${MCPP_RELEASE_BASE}/v${MCPP_VERSION}/${asset}"
+          curl --fail --location --retry 5 --retry-all-errors \
+            --retry-delay 2 --output "${RUNNER_TEMP}/${asset}" "${url}"
+          curl --fail --location --retry 5 --retry-all-errors \
+            --retry-delay 2 --output "${RUNNER_TEMP}/${asset}.sha256" \
+            "${url}.sha256"
+          if [[ "${RUNNER_OS}" == "macOS" ]]; then
+            (cd "${RUNNER_TEMP}" && shasum -a 256 -c "${asset}.sha256")
+          else
+            (cd "${RUNNER_TEMP}" && sha256sum -c "${asset}.sha256")
+          fi
+          tar -xzf "${RUNNER_TEMP}/${asset}" -C "${RUNNER_TEMP}"
+          echo "${RUNNER_TEMP}/${wrapper}/bin" >> "${GITHUB_PATH}"
+      - name: Install pinned mcpp (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $asset = "mcpp-$env:MCPP_VERSION-${{ matrix.platform }}.${{ matrix.format }}"
+          $wrapper = "mcpp-$env:MCPP_VERSION-${{ matrix.platform }}"
+          $url = "$env:MCPP_RELEASE_BASE/v$env:MCPP_VERSION/$asset"
+          curl.exe --fail --location --retry 5 --retry-all-errors `
+            --retry-delay 2 --output "$env:RUNNER_TEMP/$asset" $url
+          curl.exe --fail --location --retry 5 --retry-all-errors `
+            --retry-delay 2 --output "$env:RUNNER_TEMP/$asset.sha256" `
+            "$url.sha256"
+          $expected = (Get-Content "$env:RUNNER_TEMP/$asset.sha256").Split()[0]
+          $actual = (Get-FileHash "$env:RUNNER_TEMP/$asset" -Algorithm SHA256).Hash.ToLower()
+          if ($actual -ne $expected) { throw "mcpp archive checksum mismatch" }
+          Expand-Archive "$env:RUNNER_TEMP/$asset" -DestinationPath $env:RUNNER_TEMP
+          "$env:RUNNER_TEMP/$wrapper/bin" | Out-File -FilePath $env:GITHUB_PATH -Append
+      - name: Fetch pinned model (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: python3 tests/support/fetch_model.py --output "${RUNNER_TEMP}/stories15M.gguf"
+      - name: Fetch pinned model (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: python tests/support/fetch_model.py --output "$env:RUNNER_TEMP/stories15M.gguf"
+      - name: Run CPU inference (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf target
+          LLAMACPP_TEST_MODEL="${RUNNER_TEMP}/stories15M.gguf" \
+            mcpp test cpu_decode --strict 2>&1 | tee cpu.log
+          grep -F "LLAMACPP_CPU_TEST=PASS" cpu.log
+      - name: Run CPU inference (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Remove-Item -Recurse -Force target -ErrorAction SilentlyContinue
+          $env:LLAMACPP_TEST_MODEL = "$env:RUNNER_TEMP/stories15M.gguf"
+          & mcpp test cpu_decode --strict 2>&1 | Tee-Object -FilePath cpu.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not (Select-String -Quiet -SimpleMatch "LLAMACPP_CPU_TEST=PASS" cpu.log)) {
+            throw "CPU pass marker missing"
+          }
+
+  linux-arm64:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+      - name: Native ARM64 CPU inference in Ubuntu container
+        shell: bash
+        run: |
+          docker run --rm \
+            -e MCPP_VERSION="${MCPP_VERSION}" \
+            -v "${GITHUB_WORKSPACE}:/workspace" \
+            -w /workspace \
+            ubuntu:24.04 bash -euxo pipefail -c '
+              sed -i \
+                "s|http://ports.ubuntu.com/ubuntu-ports|http://mirrors.ustc.edu.cn/ubuntu-ports|g" \
+                /etc/apt/sources.list.d/ubuntu.sources
+              cat /etc/apt/sources.list.d/ubuntu.sources
+              apt-get update
+              DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+                ca-certificates curl python3 file binutils
+
+              asset="mcpp-${MCPP_VERSION}-linux-aarch64.tar.gz"
+              wrapper="${asset%.tar.gz}"
+              url="https://github.com/mcpp-community/mcpp/releases/download/v${MCPP_VERSION}/${asset}"
+              curl --fail --location --retry 5 --retry-all-errors \
+                --retry-delay 2 --output "/tmp/${asset}" "${url}"
+              curl --fail --location --retry 5 --retry-all-errors \
+                --retry-delay 2 --output "/tmp/${asset}.sha256" "${url}.sha256"
+              (cd /tmp && sha256sum -c "${asset}.sha256")
+              mkdir -p /opt/mcpp
+              tar -xzf "/tmp/${asset}" -C /opt/mcpp
+              export PATH="/opt/mcpp/${wrapper}/bin:${PATH}"
+              export MCPP_HOME=/tmp/llamacpp-mcpp-home
+              export MCPP_VENDORED_XLINGS="/opt/mcpp/${wrapper}/registry/bin/xlings"
+              mcpp --version | grep -F "${MCPP_VERSION}"
+
+              python3 tests/support/fetch_model.py --output /tmp/stories15M.gguf
+              rm -rf target
+              LLAMACPP_TEST_MODEL=/tmp/stories15M.gguf \
+                mcpp test cpu_decode --strict 2>&1 | tee /tmp/cpu.log
+              grep -F "LLAMACPP_CPU_TEST=PASS" /tmp/cpu.log
+
+              helper=target/.build-mcpp/build.mcpp.bin
+              test_bin=$(find target -type f -path "*/bin/cpu_decode" -print -quit)
+              test -x "${helper}"
+              test -n "${test_bin}"
+              for binary in "${helper}" "${test_bin}"; do
+                file "${binary}" | tee /tmp/file.log
+                grep -F "ARM aarch64" /tmp/file.log
+                grep -F "statically linked" /tmp/file.log
+                if readelf -l "${binary}" | grep -q INTERP; then
+                  echo "PT_INTERP present in ${binary}"
+                  exit 1
+                fi
+                echo "PT_INTERP absent in ${binary}"
+              done
+
+              test -f compile_commands.json
+              grep -F "/arch/arm/quants.c" compile_commands.json
+              grep -F "/arch/arm/repack.cpp" compile_commands.json
+              if grep -F "/arch/x86/" compile_commands.json; then
+                echo "x86 sources selected on ARM64"
+                exit 1
+              fi
+            '
+
+  metal:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install pinned mcpp
+        shell: bash
+        run: |
+          set -euo pipefail
+          asset="mcpp-${MCPP_VERSION}-macosx-arm64.tar.gz"
+          wrapper="${asset%.tar.gz}"
+          url="${MCPP_RELEASE_BASE}/v${MCPP_VERSION}/${asset}"
+          curl --fail --location --retry 5 --retry-all-errors \
+            --retry-delay 2 --output "${RUNNER_TEMP}/${asset}" "${url}"
+          curl --fail --location --retry 5 --retry-all-errors \
+            --retry-delay 2 --output "${RUNNER_TEMP}/${asset}.sha256" \
+            "${url}.sha256"
+          (cd "${RUNNER_TEMP}" && shasum -a 256 -c "${asset}.sha256")
+          tar -xzf "${RUNNER_TEMP}/${asset}" -C "${RUNNER_TEMP}"
+          echo "${RUNNER_TEMP}/${wrapper}/bin" >> "${GITHUB_PATH}"
+      - name: Run real Metal inference
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tests/support/fetch_model.py --output "${RUNNER_TEMP}/stories15M.gguf"
+          rm -rf target
+          LLAMACPP_TEST_MODEL="${RUNNER_TEMP}/stories15M.gguf" \
+            mcpp test metal_decode --features backend-metal --strict \
+            2>&1 | tee metal.log
+          grep -F "LLAMACPP_METAL_TEST=PASS" metal.log
+          grep -F "using embedded metal library" metal.log
+          grep -E "offloaded [1-9][0-9]*/[1-9][0-9]* layers to GPU" metal.log
+
+  release-contract:
+    runs-on: ubuntu-24.04
+    needs: [unit-and-import, cpu, linux-arm64, metal]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Verify release mapping and reproducibility
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 tools/check_release.py --tag v0.1.0

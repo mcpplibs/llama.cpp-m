@@ -1,0 +1,7 @@
+[upstream]
+repository = "https://github.com/ggml-org/llama.cpp"
+tag = "b10069"
+commit = "178a6c44937154dc4c4eff0d166f4a044c4fceba"
+archive_url = "https://github.com/ggml-org/llama.cpp/archive/refs/tags/b10069.tar.gz"
+archive_sha256 = "293a7c65a11e2203c5468a06d0d0e8d21dfff16ad08712b16c61efbe0d93e097"
+imported_at_utc = "2026-07-29T00:00:00Z"

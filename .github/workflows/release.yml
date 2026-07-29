@@ -1,0 +1,83 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      mapping: ${{ steps.contract.outputs.mapping }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run complete unit suite
+        run: python3 -m unittest discover -s tests/unit -p 'test_*.py' -v
+      - name: Verify immutable release contract
+        id: contract
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapping=$(python3 tools/check_release.py --tag "${GITHUB_REF_NAME}" | tail -n 1)
+          echo "${mapping}"
+          echo "mapping=${mapping}" >> "${GITHUB_OUTPUT}"
+      - name: Require latest successful CI run for the tag commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          output="${RUNNER_TEMP}/ci-runs.json"
+          downloaded=0
+          for attempt in 1 2 3 4 5; do
+            if gh api \
+              "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs?head_sha=${GITHUB_SHA}&per_page=100" \
+              > "${output}"; then
+              downloaded=1
+              break
+            fi
+            if [[ "${attempt}" -lt 5 ]]; then sleep $((attempt * 2)); fi
+          done
+          if [[ "${downloaded}" -ne 1 ]]; then
+            echo "failed to query CI workflow runs after 5 attempts"
+            exit 1
+          fi
+          python3 tools/check_ci_run.py --runs "${output}" --sha "${GITHUB_SHA}"
+
+  publish:
+    needs: verify
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Create release notes for the immutable tag archive
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_MAPPING: ${{ needs.verify.outputs.mapping }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            echo "release ${GITHUB_REF_NAME} already exists; refusing to mutate it"
+            exit 1
+          fi
+          gh release create "${GITHUB_REF_NAME}" \
+            --verify-tag \
+            --title "llama.cpp-m ${GITHUB_REF_NAME#v}" \
+            --notes "${RELEASE_MAPPING}"

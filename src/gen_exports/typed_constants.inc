@@ -1,0 +1,13 @@
+export inline constexpr uint32_t LLAMA_DEFAULT_SEED = 0xFFFFFFFF;
+export inline constexpr llama_token LLAMA_TOKEN_NULL = -1;
+export inline constexpr uint32_t LLAMA_FILE_MAGIC_GGLA = 0x67676c61u;
+export inline constexpr uint32_t LLAMA_FILE_MAGIC_GGSN = 0x6767736eu;
+export inline constexpr uint32_t LLAMA_FILE_MAGIC_GGSQ = 0x67677371u;
+export inline constexpr uint32_t LLAMA_SESSION_MAGIC = 0x6767736eu;
+export inline constexpr uint32_t LLAMA_SESSION_VERSION = 9;
+export inline constexpr uint32_t LLAMA_STATE_SEQ_MAGIC = 0x67677371u;
+export inline constexpr uint32_t LLAMA_STATE_SEQ_VERSION = 2;
+export inline constexpr llama_state_seq_flags LLAMA_STATE_SEQ_FLAGS_NONE = static_cast<llama_state_seq_flags>(0);
+export inline constexpr llama_state_seq_flags LLAMA_STATE_SEQ_FLAGS_SWA_ONLY = static_cast<llama_state_seq_flags>(1);
+export inline constexpr llama_state_seq_flags LLAMA_STATE_SEQ_FLAGS_PARTIAL_ONLY = static_cast<llama_state_seq_flags>(1);
+export inline constexpr llama_state_seq_flags LLAMA_STATE_SEQ_FLAGS_ON_DEVICE = static_cast<llama_state_seq_flags>(2);
