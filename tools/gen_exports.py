@@ -58,6 +58,9 @@ TYPED_LLAMA_CONSTANTS = {
     "LLAMA_STATE_SEQ_FLAGS_PARTIAL_ONLY": "llama_state_seq_flags",
     "LLAMA_STATE_SEQ_FLAGS_ON_DEVICE": "llama_state_seq_flags",
 }
+FIXED_WIDTH_INTEGER = re.compile(
+    r"\b(?P<unsigned>u?)int(?P<bits>8|16|32|64)_t\b"
+)
 
 
 def _find_clang():
@@ -142,7 +145,7 @@ def _enum_value(node):
 
 def _type_fingerprint(node):
     type_info = node.get("type", {})
-    return {
+    fingerprint = {
         key: re.sub(
             r"\(anonymous (struct|union|class) at [^)]+:\d+:\d+\)",
             r"(anonymous \1)",
@@ -151,6 +154,18 @@ def _type_fingerprint(node):
         for key in ("qualType", "desugaredQualType")
         if key in type_info
     }
+    qual_type = fingerprint.get("qualType", "")
+    if "desugaredQualType" in fingerprint and FIXED_WIDTH_INTEGER.search(
+        qual_type
+    ):
+        fingerprint["desugaredQualType"] = FIXED_WIDTH_INTEGER.sub(
+            lambda match: (
+                f"{'unsigned' if match.group('unsigned') else 'signed'} "
+                f"{match.group('bits')}-bit integer"
+            ),
+            qual_type,
+        )
+    return fingerprint
 
 
 def _layout_attributes(node):

@@ -18,6 +18,34 @@ sys.path.insert(0, str(TOOL_DIR))
 import gen_exports
 
 
+class TestTypeFingerprint(unittest.TestCase):
+    def test_fixed_width_integer_alias_is_platform_independent(self):
+        macos = {
+            "type": {
+                "qualType": "int64_t",
+                "desugaredQualType": "long long",
+            }
+        }
+        linux = {
+            "type": {
+                "qualType": "int64_t",
+                "desugaredQualType": "long",
+            }
+        }
+
+        self.assertEqual(
+            gen_exports._type_fingerprint(macos),
+            gen_exports._type_fingerprint(linux),
+        )
+        self.assertEqual(
+            gen_exports._type_fingerprint(macos),
+            {
+                "qualType": "int64_t",
+                "desugaredQualType": "signed 64-bit integer",
+            },
+        )
+
+
 class TestGenerateExports(unittest.TestCase):
     def setUp(self):
         for name, value in {
