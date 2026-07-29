@@ -1,5 +1,7 @@
 .mcpp/
 target/
+generated/
+compile_commands.json
 __pycache__/
 *.pyc
 models/
