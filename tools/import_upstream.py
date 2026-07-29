@@ -7,9 +7,12 @@ import json
 import os
 from pathlib import Path, PurePosixPath
 import shutil
+import ssl
 import tarfile
 import tempfile
+import time
 import tomllib
+import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
@@ -64,21 +67,40 @@ def download(
 ) -> None:
     output.parent.mkdir(parents=True, exist_ok=True)
     temporary = output.with_name(f".{output.name}.{uuid.uuid4().hex}.tmp")
-    total = 0
     try:
-        request = urllib.request.Request(url, headers={"User-Agent": "llama.cpp-m-importer"})
-        with urllib.request.urlopen(request, timeout=timeout) as response:
-            with temporary.open("wb") as stream:
-                while chunk := response.read(1024 * 1024):
-                    total += len(chunk)
-                    if total > max_bytes:
-                        raise ValueError(
-                            f"download exceeds maximum size of {max_bytes} bytes"
-                        )
-                    stream.write(chunk)
-        os.replace(temporary, output)
+        request = urllib.request.Request(
+            url, headers={"User-Agent": "llama.cpp-m-importer"}
+        )
+        for attempt in range(3):
+            total = 0
+            temporary.unlink(missing_ok=True)
+            try:
+                with urllib.request.urlopen(request, timeout=timeout) as response:
+                    with temporary.open("wb") as stream:
+                        while chunk := response.read(1024 * 1024):
+                            total += len(chunk)
+                            if total > max_bytes:
+                                raise ValueError(
+                                    f"download exceeds maximum size of {max_bytes} bytes"
+                                )
+                            stream.write(chunk)
+                os.replace(temporary, output)
+                return
+            except Exception as error:
+                if attempt == 2 or not _is_transient_network_error(error):
+                    raise
+                time.sleep(2**attempt)
     finally:
         temporary.unlink(missing_ok=True)
+
+
+def _is_transient_network_error(error: Exception) -> bool:
+    if isinstance(error, urllib.error.HTTPError):
+        return error.code in (408, 429) or 500 <= error.code < 600
+    return isinstance(
+        error,
+        (urllib.error.URLError, TimeoutError, ConnectionError, ssl.SSLError),
+    )
 
 
 def _validated_members(archive: tarfile.TarFile) -> tuple[list[tarfile.TarInfo], str]:
@@ -151,8 +173,15 @@ def _github_json(url: str) -> dict:
         url,
         headers=headers,
     )
-    with urllib.request.urlopen(request, timeout=30) as response:
-        return json.loads(response.read())
+    for attempt in range(3):
+        try:
+            with urllib.request.urlopen(request, timeout=30) as response:
+                return json.loads(response.read())
+        except Exception as error:
+            if attempt == 2 or not _is_transient_network_error(error):
+                raise
+            time.sleep(2**attempt)
+    raise AssertionError("unreachable")
 
 
 def resolve_tag_commit(repository: str, tag: str) -> str:

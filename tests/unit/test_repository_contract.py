@@ -104,6 +104,34 @@ class RepositoryContractTest(unittest.TestCase):
         self.assertNotIn("set -o pipefail", workflow)
         self.assertGreaterEqual(workflow.count("set -euo pipefail"), 5)
 
+    def test_policy_workflows_are_report_only_and_tag_gated(self):
+        upstream_path = ROOT / ".github/workflows/upstream-check.yml"
+        self.assertTrue(upstream_path.is_file())
+        upstream = upstream_path.read_text(encoding="utf-8")
+        for marker in (
+            'cron: "17 3 * * 1"',
+            "contents: read",
+            "python3 tools/check_upstream.py",
+            "GITHUB_STEP_SUMMARY",
+        ):
+            self.assertIn(marker, upstream)
+        for forbidden in ("git push", "gh issue", "gh release", "mcpp-index"):
+            self.assertNotIn(forbidden, upstream)
+
+        release_path = ROOT / ".github/workflows/release.yml"
+        self.assertTrue(release_path.is_file())
+        release = release_path.read_text(encoding="utf-8")
+        for marker in (
+            'tags: ["v*"]',
+            "fetch-depth: 0",
+            "python3 -m unittest discover",
+            "tools/check_release.py",
+            "check-runs",
+            "gh release create",
+        ):
+            self.assertIn(marker, release)
+        self.assertNotIn("upload-release-asset", release)
+
 
 if __name__ == "__main__":
     unittest.main()

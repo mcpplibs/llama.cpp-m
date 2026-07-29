@@ -1,0 +1,22 @@
+name: upstream check
+
+on:
+  schedule:
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  report:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Report upstream movement
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 tools/check_upstream.py >> "${GITHUB_STEP_SUMMARY}"

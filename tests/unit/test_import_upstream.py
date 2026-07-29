@@ -7,6 +7,7 @@ import tarfile
 import tempfile
 import unittest
 from unittest import mock
+import urllib.error
 
 from tools import import_upstream
 
@@ -197,6 +198,56 @@ class ImportUpstreamTest(unittest.TestCase):
         self.assertEqual(
             captured_request.get_header("Authorization"), "Bearer test-token"
         )
+
+    def test_download_retries_transient_network_failure(self):
+        output = self.root / "archive.tar.gz"
+        response = mock.MagicMock()
+        response.__enter__.return_value.read.side_effect = [b"archive", b""]
+        with mock.patch(
+            "urllib.request.urlopen",
+            side_effect=[urllib.error.URLError("TLS EOF"), response],
+        ) as urlopen, mock.patch("time.sleep") as sleep:
+            try:
+                import_upstream.download("https://example.invalid/archive", output)
+            except urllib.error.URLError as error:
+                self.fail(f"transient download failure was not retried: {error}")
+
+        self.assertEqual(output.read_bytes(), b"archive")
+        self.assertEqual(urlopen.call_count, 2)
+        sleep.assert_called_once()
+
+    def test_github_requests_retry_transient_network_failure(self):
+        response = mock.MagicMock()
+        response.__enter__.return_value.read.return_value = json.dumps(
+            {"object": {"type": "commit", "sha": "f" * 40}}
+        ).encode()
+        with mock.patch(
+            "urllib.request.urlopen",
+            side_effect=[urllib.error.URLError("TLS EOF"), response],
+        ) as urlopen, mock.patch("time.sleep") as sleep:
+            try:
+                commit = import_upstream.resolve_tag_commit(
+                    "https://github.com/example/project", "v1.0.0"
+                )
+            except urllib.error.URLError as error:
+                self.fail(f"transient GitHub failure was not retried: {error}")
+
+        self.assertEqual(commit, "f" * 40)
+        self.assertEqual(urlopen.call_count, 2)
+        sleep.assert_called_once()
+
+    def test_github_requests_do_not_retry_stable_local_failure(self):
+        with mock.patch(
+            "urllib.request.urlopen",
+            side_effect=PermissionError("sandbox denied"),
+        ) as urlopen, mock.patch("time.sleep") as sleep:
+            with self.assertRaises(PermissionError):
+                import_upstream.resolve_tag_commit(
+                    "https://github.com/example/project", "v1.0.0"
+                )
+
+        self.assertEqual(urlopen.call_count, 1)
+        sleep.assert_not_called()
 
 
 if __name__ == "__main__":
