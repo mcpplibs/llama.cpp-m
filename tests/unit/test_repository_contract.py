@@ -53,6 +53,46 @@ class RepositoryContractTest(unittest.TestCase):
 
         self.assertIn("sampled < 0 || sampled >= vocabulary_size", source)
 
+    def test_metal_runtime_segments_probe_and_model_evidence(self):
+        source = (ROOT / "tests/metal_decode.cpp").read_text(encoding="utf-8")
+        probe = source.find("run_metal_add_probe(device)")
+        reset = source.find("logs.clear()", probe)
+        model_load = source.find("llama_model_load_from_file", reset)
+        self.assertNotEqual(probe, -1)
+        self.assertNotEqual(reset, -1)
+        self.assertNotEqual(model_load, -1)
+        self.assertLess(probe, reset)
+        self.assertLess(reset, model_load)
+
+        self.assertIn("has_positive_metal_model_buffer(logs)", source)
+        self.assertIn("has_positive_metal_compute_buffer(logs)", source)
+
+    def test_chat_cpu_exposes_only_the_cpu_backend(self):
+        source = (
+            ROOT / "examples" / "chat-cpu" / "src" / "main.cpp"
+        ).read_text(encoding="utf-8")
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+
+        self.assertNotIn("backend_kind", source)
+        self.assertNotIn("cpu|metal", source)
+        self.assertNotIn('requested == "metal"', source)
+        self.assertIn("model_params.n_gpu_layers = 0;", source)
+        self.assertIn('"backend=cpu', source)
+        self.assertNotRegex(readme, r"chat-cpu[\s\S]{0,120}mcpp run -- [^\n]+ cpu(?:\s|$)")
+
+    def test_chat_metal_requires_positive_model_and_compute_buffers(self):
+        source = (
+            ROOT / "examples" / "chat-metal" / "src" / "main.cpp"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("has_positive_metal_model_buffer(logs)", source)
+        self.assertIn("has_positive_metal_compute_buffer(logs)", source)
+        report = source.index('"backend=" << requested')
+        self.assertLess(
+            source.index("has_positive_metal_compute_buffer(logs)", 1),
+            report,
+        )
+
     def test_chat_examples_keep_next_token_alive_and_report_runtime_errors(self):
         for example in ("chat-cpu", "chat-metal"):
             source = (

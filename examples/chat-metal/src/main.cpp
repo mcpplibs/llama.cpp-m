@@ -4,9 +4,33 @@ import llamacpp;
 namespace {
 
 enum class backend_kind { cpu, metal };
+std::string logs;
 
 void log_callback(enum ggml_log_level, const char * text, void *) {
-    if (text) std::cerr << text;
+    if (text) {
+        logs += text;
+        std::cerr << text;
+    }
+}
+
+bool has_positive_buffer(const std::string & text, const std::regex & pattern) {
+    std::smatch match;
+    return std::regex_search(text, match, pattern)
+        && std::stod(match[1].str()) > 0.0;
+}
+
+bool has_positive_metal_model_buffer(const std::string & text) {
+    static const std::regex pattern(
+        R"(MTL[0-9]+(?:_[A-Za-z0-9]+)? model buffer size\s*=\s*([0-9]+(?:\.[0-9]+)?) MiB)"
+    );
+    return has_positive_buffer(text, pattern);
+}
+
+bool has_positive_metal_compute_buffer(const std::string & text) {
+    static const std::regex pattern(
+        R"(MTL[0-9]+ compute buffer size\s*=\s*([0-9]+(?:\.[0-9]+)?) MiB)"
+    );
+    return has_positive_buffer(text, pattern);
 }
 
 int usage(const char * program) {
@@ -52,6 +76,13 @@ int main(int argc, char ** argv) {
         llama_backend_free();
         return 4;
     }
+    if (backend == backend_kind::metal
+        && !has_positive_metal_model_buffer(logs)) {
+        std::cerr << "Metal model offload did not allocate a GPU buffer\n";
+        llama_model_free(model);
+        llama_backend_free();
+        return 9;
+    }
 
     const llama_vocab * vocabulary = llama_model_get_vocab(model);
     const int prompt_size = -llama_tokenize(
@@ -89,6 +120,14 @@ int main(int argc, char ** argv) {
         llama_model_free(model);
         llama_backend_free();
         return 6;
+    }
+    if (backend == backend_kind::metal
+        && !has_positive_metal_compute_buffer(logs)) {
+        std::cerr << "Metal inference did not allocate a GPU compute buffer\n";
+        llama_free(context);
+        llama_model_free(model);
+        llama_backend_free();
+        return 10;
     }
 
     llama_sampler * sampler = llama_sampler_chain_init(

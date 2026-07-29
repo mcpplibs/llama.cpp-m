@@ -70,7 +70,7 @@ The checked-in example uses a path dependency on this repository:
 
 ```bash
 cd examples/chat-cpu
-mcpp run -- /path/to/model.gguf cpu \
+mcpp run -- /path/to/model.gguf \
   'User: Introduce yourself in one sentence.\nAssistant:'
 ```
 
@@ -94,12 +94,15 @@ valid run should report all of the following:
 using embedded metal library
 GPU name: MTL0 (...)
 offloaded N/M layers to GPU
+MTL0_Mapped model buffer size = ... MiB
+MTL0 compute buffer size = ... MiB
 backend=metal ... generated_tokens=32
 ```
 
 The package test is stricter than successful compilation: it checks Metal
-registration, buffer allocation, graph execution, positive layer offload,
-decode, and sampling.
+registration, graph execution, positive layer offload, positive Metal-owned
+model and compute buffers, decode, and sampling. The Metal example exits
+nonzero before reporting success if either Metal buffer is absent.
 
 ## Supported Boundary
 

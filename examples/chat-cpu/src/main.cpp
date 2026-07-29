@@ -3,49 +3,30 @@ import llamacpp;
 
 namespace {
 
-enum class backend_kind { cpu, metal };
-
 void log_callback(enum ggml_log_level, const char * text, void *) {
     if (text) std::cerr << text;
 }
 
 int usage(const char * program) {
     std::cerr << "usage: " << program
-              << " <model.gguf> <cpu|metal> [prompt]\n";
+              << " <model.gguf> [prompt]\n";
     return 2;
 }
 
 }  // namespace
 
 int main(int argc, char ** argv) {
-    if (argc != 3 && argc != 4) return usage(argv[0]);
+    if (argc != 2 && argc != 3) return usage(argv[0]);
 
-    const std::string_view requested = argv[2];
-    backend_kind backend;
-    if (requested == "cpu") {
-        backend = backend_kind::cpu;
-    } else if (requested == "metal") {
-        backend = backend_kind::metal;
-    } else {
-        return usage(argv[0]);
-    }
-    const std::string prompt = argc == 4
-        ? argv[3]
+    const std::string prompt = argc == 3
+        ? argv[2]
         : "User: Hello! Who are you?\nAssistant:";
 
     llama_log_set(log_callback, nullptr);
     llama_backend_init();
-    if (backend == backend_kind::metal) {
-        ggml_backend_reg_t registry = ggml_backend_reg_by_name("MTL");
-        if (!registry || ggml_backend_reg_dev_count(registry) == 0) {
-            std::cerr << "Metal backend is unavailable\n";
-            llama_backend_free();
-            return 3;
-        }
-    }
 
     llama_model_params model_params = llama_model_default_params();
-    model_params.n_gpu_layers = backend == backend_kind::metal ? 99 : 0;
+    model_params.n_gpu_layers = 0;
     llama_model * model = llama_model_load_from_file(argv[1], model_params);
     if (!model) {
         std::cerr << "failed to load model: " << argv[1] << '\n';
@@ -133,7 +114,7 @@ int main(int argc, char ** argv) {
         batch = llama_batch_get_one(&sampled, 1);
     }
     std::cout << '\n';
-    std::cerr << "backend=" << requested
+    std::cerr << "backend=cpu"
               << " params=" << llama_model_n_params(model)
               << " generated_tokens=" << generated << '\n';
 

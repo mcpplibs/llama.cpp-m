@@ -35,6 +35,26 @@ int fail(const char * message) {
     return 1;
 }
 
+bool has_positive_buffer(const std::string & text, const std::regex & pattern) {
+    std::smatch match;
+    return std::regex_search(text, match, pattern)
+        && std::stod(match[1].str()) > 0.0;
+}
+
+bool has_positive_metal_model_buffer(const std::string & text) {
+    static const std::regex pattern(
+        R"(MTL[0-9]+(?:_[A-Za-z0-9]+)? model buffer size\s*=\s*([0-9]+(?:\.[0-9]+)?) MiB)"
+    );
+    return has_positive_buffer(text, pattern);
+}
+
+bool has_positive_metal_compute_buffer(const std::string & text) {
+    static const std::regex pattern(
+        R"(MTL[0-9]+ compute buffer size\s*=\s*([0-9]+(?:\.[0-9]+)?) MiB)"
+    );
+    return has_positive_buffer(text, pattern);
+}
+
 bool has_embedded_library(ggml_backend_reg_t registry) {
     auto get_features = reinterpret_cast<ggml_backend_get_features_t>(
         ggml_backend_reg_get_proc_address(
@@ -140,6 +160,11 @@ int main() {
         llama_backend_free();
         return fail("MTL F32 ADD graph did not execute correctly");
     }
+    if (logs.find("using embedded metal library") == std::string::npos) {
+        llama_backend_free();
+        return fail("embedded Metal source path was not used by the probe");
+    }
+    logs.clear();
 
     llama_model_params model_params = llama_model_default_params();
     model_params.n_gpu_layers = 1;
@@ -157,6 +182,11 @@ int main() {
         llama_backend_free();
         return fail("positive GPU layer offload was not logged");
     }
+    if (!has_positive_metal_model_buffer(logs)) {
+        llama_model_free(model);
+        llama_backend_free();
+        return fail("positive Metal model buffer was not logged");
+    }
 
     llama_context_params context_params = llama_context_default_params();
     context_params.n_ctx = 64;
@@ -166,14 +196,18 @@ int main() {
         llama_backend_free();
         return fail("context creation failed");
     }
+    if (!has_positive_metal_compute_buffer(logs)) {
+        llama_free(context);
+        llama_model_free(model);
+        llama_backend_free();
+        return fail("positive Metal compute buffer was not logged");
+    }
 
     llama_token tokens[] = {1, 2, 3};
     const int decode_result = llama_decode(
         context,
         llama_batch_get_one(tokens, sizeof(tokens) / sizeof(tokens[0]))
     );
-    const bool used_embedded_library =
-        logs.find("using embedded metal library") != std::string::npos;
     if (decode_result != 0) {
         llama_free(context);
         llama_model_free(model);
@@ -202,9 +236,6 @@ int main() {
     llama_free(context);
     llama_model_free(model);
     llama_backend_free();
-    if (!used_embedded_library) {
-        return fail("embedded Metal source path was not used");
-    }
 
     std::cout << "LLAMACPP_METAL_TEST=PASS\n";
     return 0;
