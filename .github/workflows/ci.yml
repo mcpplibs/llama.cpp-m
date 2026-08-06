@@ -251,4 +251,11 @@ jobs:
       - name: Verify release mapping and reproducibility
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: python3 tools/check_release.py --tag v0.1.0
+        run: |
+          # The tag IS the package version — check_release.py enforces it — so
+          # read it from the manifest rather than hardcoding a second copy here.
+          # The hardcoded `v0.1.0` is exactly what broke when the version scheme
+          # moved to upstream's checkpoint (mcpp-index#163).
+          tag=$(sed -n 's/^version *= *"\(.*\)"/\1/p' mcpp.toml | head -1)
+          echo "release contract for tag: $tag"
+          python3 tools/check_release.py --tag "$tag"
