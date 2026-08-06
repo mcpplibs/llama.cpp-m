@@ -167,7 +167,12 @@ class RepositoryContractTest(unittest.TestCase):
         self.assertTrue(release_path.is_file())
         release = release_path.read_text(encoding="utf-8")
         for marker in (
-            'tags: ["v*"]',
+            # The tag IS the package version, which is upstream's build number
+            # (`b10069`) — see docs/upstream-update-policy.md. This assertion is
+            # why the scheme change did not ship a release workflow that never
+            # fires: it was the FOURTH place `v*` was written down, and the only
+            # one that would have failed loudly on its own.
+            'tags: ["b[0-9]*"]',
             "fetch-depth: 0",
             "python3 -m unittest discover",
             "tools/check_release.py",
