@@ -26,8 +26,9 @@ class RepositoryContractTest(unittest.TestCase):
     def test_package_and_module_identity(self):
         manifest = (ROOT / "mcpp.toml").read_text(encoding="utf-8")
         module = (ROOT / "src/llamacpp.cppm").read_text(encoding="utf-8")
+        self.assertRegex(manifest, r'(?m)^namespace\s*=\s*"ggml-org"$')
         self.assertRegex(manifest, r'(?m)^name\s*=\s*"llamacpp"$')
-        self.assertRegex(manifest, r'(?m)^version\s*=\s*"0\.1\.0"$')
+        self.assertRegex(manifest, r'(?m)^version\s*=\s*"b10069"$')
         self.assertIn("export module llamacpp;", module)
 
     def test_vendored_tree_is_not_locally_patched(self):

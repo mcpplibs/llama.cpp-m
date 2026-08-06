@@ -74,7 +74,15 @@ class BuildManifestContract(unittest.TestCase):
     def test_identity_and_public_module_are_cxx23(self):
         package = self.manifest["package"]
         self.assertEqual(package["name"], "llamacpp")
-        self.assertEqual(package["version"], "0.1.0")
+        # The namespace names whose library this is (mcpp-index#163); the version
+        # IS the upstream checkpoint, so it must agree with the build info the
+        # manifest generates for ggml.
+        self.assertEqual(package["namespace"], "ggml-org")
+        self.assertEqual(package["version"], "b10069")
+        self.assertIn(
+            f'#define GGML_VERSION "{package["version"]}"',
+            self.manifest["generated_files"]["generated/ggml_build_info.h"],
+        )
         self.assertEqual(package["standard"], "c++23")
         self.assertIn("src/llamacpp.cppm", self.base_sources())
         self.assertEqual(self.manifest["targets"], {"llama": {"kind": "lib"}})

@@ -502,7 +502,7 @@ def main() -> int:
 
     root = args.source.resolve()
     if not (root / 'include/llama.h').is_file():
-        ap.error(f'mcpplibs:llamacpp source tree not found: {root}')
+        ap.error(f'ggml-org:llamacpp source tree not found: {root}')
 
     expected = None
     if args.check:

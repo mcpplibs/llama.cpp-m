@@ -7,29 +7,29 @@ module for mcpp. The public module is:
 import llamacpp;
 ```
 
-Version `0.1.0` maps to llama.cpp `b10069`. CPU is the default backend. Metal
-is an additive feature for macOS ARM64.
+The package version IS llama.cpp's build number: `b10069`. CPU is the default
+backend. Metal is an additive feature for macOS ARM64.
 
 ## Add The Package
 
-After `0.1.0` is published in mcpp-index:
+After `b10069` is published in mcpp-index:
 
 ```bash
-mcpp add mcpplibs:llamacpp@0.1.0
+mcpp add ggml-org:llamacpp@b10069
 ```
 
 The equivalent manifest entry is:
 
 ```toml
-[dependencies.mcpplibs]
-llamacpp = "0.1.0"
+[dependencies.ggml-org]
+llamacpp = "b10069"
 ```
 
 For Metal on macOS ARM64:
 
 ```toml
-[dependencies.mcpplibs]
-llamacpp = { version = "0.1.0", features = ["backend-metal"] }
+[dependencies.ggml-org]
+llamacpp = { version = "b10069", features = ["backend-metal"] }
 ```
 
 ## Minimal CPU Program
@@ -106,18 +106,18 @@ nonzero before reporting success if either Metal buffer is absent.
 
 ## Supported Boundary
 
-`0.1.0` includes:
+`b10069` includes:
 
 - the public llama.cpp C API exposed through `import llamacpp;`;
 - the CPU backend on Linux x86_64, Linux ARM64, Windows x86_64, and macOS ARM64;
 - the Metal backend on macOS ARM64;
 - architecture-specific x86_64 and ARM64 CPU source selection.
 
-`0.1.0` does not include `mtmd`, CUDA, Vulkan, RPC, or other upstream backends.
+`b10069` does not include `mtmd`, CUDA, Vulkan, RPC, or other upstream backends.
 It also does not claim that every upstream model architecture has been tested.
 Deprecated upstream C APIs remain exported for API completeness; code that
 calls them may receive the deprecation warnings defined by upstream.
 
 See [the update policy](docs/upstream-update-policy.md) for versioning and
-checkpoint selection, and [the 0.1.0 validation record](docs/validation/0.1.0.md)
+checkpoint selection, and [the b10069 validation record](docs/validation/b10069.md)
 for exact evidence and remaining release gates.

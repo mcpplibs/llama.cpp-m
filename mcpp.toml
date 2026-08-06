@@ -1,6 +1,20 @@
+# The namespace names whose library this is, not who packaged it; the version
+# says which upstream you are getting. `mcpplibs` is mcpp's DEFAULT namespace
+# (kDefaultNamespace), not an answer to "whose library" — llama.cpp is
+# ggml-org's, and this repository only adds the C++23 module layer.
+#
+# The version is upstream's build number VERBATIM. `0.1.0` needed a lookup
+# table to read, and the README carried it: "Version 0.1.0 maps to llama.cpp
+# b10069". A version that needs a decoder ring is not a version.
+#
+# `b10069` is not semver, and mcpp handles it — verified: resolution, version-key
+# matching and wire addressing all work on a literal non-semver key. What it
+# cannot do is RANGES over it (`^b10069` is not expressible), so consumers pin
+# exactly. See mcpp#363; rule and migration table in mcpp-index#163.
 [package]
+namespace = "ggml-org"
 name = "llamacpp"
-version = "0.1.0"
+version = "b10069"
 description = "C++23 module package for llama.cpp b10069"
 license = "MIT"
 standard = "c++23"

@@ -538,7 +538,7 @@ def main(argv=None):
     upstream = Path(args.upstream) if args.upstream else DEFAULT_UPSTREAM_DIR
     if not args.upstream and not (upstream / "include/llama.h").is_file():
         print(
-            f"mcpplibs:llamacpp upstream tree not found: {upstream}",
+            f"ggml-org:llamacpp upstream tree not found: {upstream}",
             file=sys.stderr,
         )
         return 1
