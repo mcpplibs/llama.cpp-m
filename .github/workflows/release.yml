@@ -2,7 +2,11 @@ name: release
 
 on:
   push:
-    tags: ["v*"]
+    # The tag IS the package version, which is upstream's build number
+    # (`b10069`), optionally with a wrapper revision (`b10069.1`) — see
+    # docs/upstream-update-policy.md. `v*` was the third place the old
+    # semantic-version scheme was written down, and it silently did not fire.
+    tags: ["b[0-9]*"]
 
 permissions:
   contents: read
