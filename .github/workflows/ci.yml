@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 env:
-  MCPP_VERSION: "2026.7.28.2"
+  MCPP_VERSION: "2026.8.5.4"
   MCPP_RELEASE_BASE: https://github.com/mcpp-community/mcpp/releases/download
 
 jobs:
