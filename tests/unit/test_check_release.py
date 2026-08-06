@@ -10,7 +10,7 @@ from tools import check_release
 
 def write_release_tree(root: Path) -> None:
     (root / "mcpp.toml").write_text(
-        '[package]\nname = "llamacpp"\nversion = "0.1.0"\n',
+        '[package]\nname = "llamacpp"\nversion = "b10069"\n',
         encoding="utf-8",
     )
     (root / "upstream.lock").write_text(
@@ -39,9 +39,9 @@ class CheckReleaseTest(unittest.TestCase):
         self.tempdir.cleanup()
 
     def test_tag_matches_package_version_and_lock_mapping(self):
-        identity = check_release.load_identity(self.root, "v0.1.0")
+        identity = check_release.load_identity(self.root, "b10069")
 
-        self.assertEqual(str(identity.version), "0.1.0")
+        self.assertEqual(str(identity.version), "b10069")
         self.assertEqual(identity.upstream_tag, "b10069")
         self.assertEqual(
             identity.upstream_commit,
@@ -50,7 +50,7 @@ class CheckReleaseTest(unittest.TestCase):
 
     def test_rejects_tag_version_mismatch(self):
         with self.assertRaisesRegex(ValueError, "tag.*version"):
-            check_release.load_identity(self.root, "v0.1.1")
+            check_release.load_identity(self.root, "b10069.1")
 
     def test_rejects_noncanonical_archive_mapping(self):
         lock = self.root / "upstream.lock"
@@ -62,7 +62,7 @@ class CheckReleaseTest(unittest.TestCase):
         )
 
         with self.assertRaisesRegex(ValueError, "archive URL"):
-            check_release.load_identity(self.root, "v0.1.0")
+            check_release.load_identity(self.root, "b10069")
 
     def test_rejects_consistent_mapping_to_upstream_fork(self):
         lock = self.root / "upstream.lock"
@@ -75,10 +75,10 @@ class CheckReleaseTest(unittest.TestCase):
         )
 
         with self.assertRaisesRegex(ValueError, "official upstream repository"):
-            check_release.load_identity(self.root, "v0.1.0")
+            check_release.load_identity(self.root, "b10069")
 
     def test_changed_existing_tag_mapping_fails(self):
-        current = check_release.load_identity(self.root, "v0.1.0")
+        current = check_release.load_identity(self.root, "b10069")
         existing = current._replace(upstream_commit="f" * 40)
 
         with self.assertRaisesRegex(ValueError, "immutable"):
@@ -93,37 +93,40 @@ class CheckReleaseTest(unittest.TestCase):
             if arguments[0] == "rev-parse":
                 return completed(arguments, 0, "d" * 40)
             if arguments[-1].endswith(":mcpp.toml"):
-                return completed(arguments, 0, '[package]\nversion = "0.1.0"\n')
+                return completed(arguments, 0, '[package]\nversion = "b10069"\n')
             return completed(arguments, 1)
 
         with mock.patch.object(check_release, "_git", side_effect=git):
             with self.assertRaisesRegex(ValueError, "existing release tag"):
-                check_release._tag_identity(self.root, "v0.1.0")
+                check_release._tag_identity(self.root, "b10069")
 
-    def test_same_checkpoint_wrapper_fix_requires_patch_bump(self):
-        previous = check_release.ReleaseIdentity.for_test("0.1.0", "b10069")
-        patch = check_release.ReleaseIdentity.for_test("0.1.1", "b10069")
-        minor = check_release.ReleaseIdentity.for_test("0.2.0", "b10069")
+    def test_same_checkpoint_wrapper_fix_requires_a_revision_bump(self):
+        # The build number names the checkpoint, so a same-checkpoint release can
+        # only move the revision. Moving the build number instead would claim a
+        # checkpoint that is not the one vendored.
+        previous = check_release.ReleaseIdentity.for_test("b10069", "b10069")
+        revision = check_release.ReleaseIdentity.for_test("b10069.1", "b10069")
+        wrong_build = check_release.ReleaseIdentity.for_test("b10123", "b10069")
 
-        check_release.validate_version_transition(previous, patch)
-        with self.assertRaisesRegex(ValueError, "patch"):
-            check_release.validate_version_transition(previous, minor)
+        check_release.validate_version_transition(previous, revision)
+        with self.assertRaisesRegex(ValueError, "build number"):
+            check_release.validate_version_transition(previous, wrong_build)
 
-    def test_changed_checkpoint_requires_at_least_minor_bump(self):
-        previous = check_release.ReleaseIdentity.for_test("0.1.0", "b10069")
-        patch = check_release.ReleaseIdentity.for_test("0.1.1", "b10123")
-        minor = check_release.ReleaseIdentity.for_test("0.2.0", "b10123")
+    def test_changed_checkpoint_takes_that_checkpoints_build_number(self):
+        previous = check_release.ReleaseIdentity.for_test("b10069", "b10069")
+        forward = check_release.ReleaseIdentity.for_test("b10123", "b10123")
+        backward = check_release.ReleaseIdentity.for_test("b10069.1", "b10123")
 
-        with self.assertRaisesRegex(ValueError, "minor"):
-            check_release.validate_version_transition(previous, patch)
-        check_release.validate_version_transition(previous, minor)
+        check_release.validate_version_transition(previous, forward)
+        with self.assertRaisesRegex(ValueError, "higher build number"):
+            check_release.validate_version_transition(previous, backward)
 
     def test_rejects_candidate_older_than_an_existing_release(self):
-        current = check_release.ReleaseIdentity.for_test("0.1.1", "b10069")
-        higher = check_release.ReleaseIdentity.for_test("0.2.0", "b10123")
-        lower = check_release.ReleaseIdentity.for_test("0.1.0", "b10069")
+        current = check_release.ReleaseIdentity.for_test("b10069.1", "b10069")
+        higher = check_release.ReleaseIdentity.for_test("b10123", "b10123")
+        lower = check_release.ReleaseIdentity.for_test("b10069", "b10069")
         tags = subprocess.CompletedProcess(
-            [], 0, stdout="v0.2.0\nv0.1.0\n", stderr=""
+            [], 0, stdout="b10123\nb10069\n", stderr=""
         )
 
         with mock.patch.object(check_release, "_git", return_value=tags):
@@ -131,12 +134,12 @@ class CheckReleaseTest(unittest.TestCase):
                 check_release,
                 "_tag_identity",
                 side_effect=lambda _root, tag: {
-                    "v0.2.0": higher,
-                    "v0.1.0": lower,
+                    "b10123": higher,
+                    "b10069": lower,
                 }[tag],
             ):
                 with self.assertRaisesRegex(ValueError, "newer release already exists"):
-                    check_release._previous_identity(self.root, current, "v0.1.1")
+                    check_release._previous_identity(self.root, current, "b10069.1")
 
     def test_vendored_source_rejects_git_metadata_and_submodules(self):
         check_release.validate_vendor_boundary(self.root)
@@ -167,10 +170,10 @@ class CheckReleaseTest(unittest.TestCase):
             self.assertEqual(call.kwargs["cwd"], self.root)
 
     def test_mapping_line_is_stable(self):
-        identity = check_release.load_identity(self.root, "v0.1.0")
+        identity = check_release.load_identity(self.root, "b10069")
         self.assertEqual(
             check_release.format_mapping(identity),
-            "llama.cpp-m 0.1.0 -> llama.cpp b10069 "
+            "llama.cpp-m b10069 -> llama.cpp b10069 "
             "(178a6c44937154dc4c4eff0d166f4a044c4fceba)",
         )
 

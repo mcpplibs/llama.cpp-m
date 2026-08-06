@@ -2,6 +2,7 @@
 
 import argparse
 from pathlib import Path
+import re
 import subprocess
 import sys
 import tomllib
@@ -15,19 +16,39 @@ from tools.import_upstream import OFFICIAL_UPSTREAM_REPOSITORY, load_lock
 
 
 class Version(NamedTuple):
-    major: int
-    minor: int
-    patch: int
+    """The wrapper version IS upstream's build number.
+
+    `b10069` is llama.cpp b10069, and a wrapper-only fix on the same checkpoint
+    adds a revision: `b10069.1`. This replaced a separate semantic version whose
+    README had to carry a decoder ring next to it ("Version 0.1.0 maps to
+    llama.cpp b10069"); see docs/upstream-update-policy.md and mcpp-index#163.
+
+    Ordering still works — the build number is an integer — so the "must not
+    release something older" checks below are unchanged. What is gone is the
+    major/minor/patch contract; the drift it used to police is now impossible by
+    construction, because the version and the checkpoint are the same string.
+    """
+
+    build: int          # upstream llama.cpp build number
+    revision: int       # wrapper revision on that checkpoint; 0 when absent
 
     @classmethod
     def parse(cls, value: str) -> "Version":
-        parts = value.split(".")
-        if len(parts) != 3 or any(not part.isdigit() for part in parts):
-            raise ValueError(f"invalid semantic version: {value}")
-        return cls(*(int(part) for part in parts))
+        match = re.fullmatch(r"b(\d+)(?:\.([1-9]\d*))?", value)
+        if not match:
+            raise ValueError(
+                f"invalid wrapper version: {value!r} — expected upstream's build "
+                f"number (b10069), optionally with a wrapper revision (b10069.1)"
+            )
+        return cls(int(match.group(1)), int(match.group(2) or 0))
 
     def __str__(self) -> str:
-        return f"{self.major}.{self.minor}.{self.patch}"
+        return f"b{self.build}" + (f".{self.revision}" if self.revision else "")
+
+    @property
+    def upstream_tag(self) -> str:
+        """The checkpoint this version names."""
+        return f"b{self.build}"
 
 
 class ReleaseIdentity(NamedTuple):
@@ -69,9 +90,20 @@ def _identity_from_text(manifest_text: str, lock_text: str, tag: str) -> Release
     except (KeyError, TypeError) as error:
         raise ValueError(f"invalid release identity: missing {error}") from error
 
-    if tag != f"v{identity.version}":
+    # The tag is the version verbatim, which is also upstream's own tag form
+    # (ggml-org/llama.cpp tags releases `b10069`, not `vb10069`).
+    if tag != str(identity.version):
         raise ValueError(
             f"release tag {tag} does not match package version {identity.version}"
+        )
+    # The version NAMES the vendored checkpoint. Before, this was a convention
+    # the transition rules policed after the fact; now a mismatch is simply not
+    # a valid identity.
+    if identity.version.upstream_tag != identity.upstream_tag:
+        raise ValueError(
+            f"package version {identity.version} names checkpoint "
+            f"{identity.version.upstream_tag}, but the lock vendors "
+            f"{identity.upstream_tag}"
         )
     if identity.upstream_repository != OFFICIAL_UPSTREAM_REPOSITORY:
         raise ValueError(
@@ -133,21 +165,25 @@ def validate_version_transition(
         and current.upstream_commit == previous.upstream_commit
     )
     if same_checkpoint:
-        if not (
-            current.version.major == previous.version.major
-            and current.version.minor == previous.version.minor
-            and current.version.patch > previous.version.patch
-        ):
-            raise ValueError("a same-checkpoint wrapper fix requires a patch bump")
+        # Same checkpoint means the same build number, so the only thing left to
+        # move is the wrapper revision.
+        if current.version.build != previous.version.build:
+            raise ValueError(
+                "a same-checkpoint release must keep the checkpoint's build number"
+            )
+        if current.version.revision <= previous.version.revision:
+            raise ValueError(
+                "a same-checkpoint wrapper fix requires a revision bump "
+                "(b10069 -> b10069.1)"
+            )
         return
-    if not (
-        current.version.major > previous.version.major
-        or (
-            current.version.major == previous.version.major
-            and current.version.minor > previous.version.minor
+    # A new checkpoint IS a new build number; `_identity_from_text` has already
+    # checked that the version names the checkpoint actually vendored, so the
+    # only thing left is that releases move forward.
+    if current.version.build <= previous.version.build:
+        raise ValueError(
+            "a changed upstream checkpoint requires its own, higher build number"
         )
-    ):
-        raise ValueError("a changed upstream checkpoint requires at least a minor bump")
 
 
 def validate_vendor_boundary(root: Path) -> None:
@@ -218,7 +254,7 @@ def _previous_identity(
         if tag == current_tag:
             continue
         try:
-            version = Version.parse(tag.removeprefix("v"))
+            version = Version.parse(tag)
         except ValueError:
             continue
         if version > current.version:

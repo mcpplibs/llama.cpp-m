@@ -8,10 +8,13 @@ checkpoints proven by the complete platform and API gate.
 
 The wrapper and upstream project have separate identities:
 
-- `llama.cpp-m` has its own semantic version.
+- `llama.cpp-m` carries **upstream's version verbatim**, not a version of its
+  own. See "Version Model" below for why that replaced a separate semantic
+  version.
 - Every wrapper release maps to exactly one upstream tag and commit.
-- The package coordinate is `mcpplibs:llamacpp`; consumers use
-  `import llamacpp;`.
+- The package coordinate is `ggml-org:llamacpp`; consumers use
+  `import llamacpp;`. The namespace names whose library this is — llama.cpp is
+  ggml-org's — rather than who packaged it (see mcpp-index#163).
 - mcpp-index points only to immutable `llama.cpp-m` releases, never a moving
   upstream branch.
 
@@ -25,16 +28,32 @@ verified source under `third_party/llama.cpp/` and does not use a Git submodule.
 
 ## Version Model
 
-The initial wrapper release is `0.1.0`, based on upstream `b10069`.
+**The wrapper version IS the upstream build number.** The first release is
+`b10069`, because that is the llama.cpp it contains.
 
-| Change | Required wrapper version change |
+This replaced a separate semantic version (`0.1.0`). The reason is visible in
+what the old README had to say next to it: *"Version `0.1.0` maps to llama.cpp
+`b10069`."* A version that needs a lookup table to read is not telling the
+consumer which library they are getting — which is the one thing a version is
+for. The same correction is being applied across the ecosystem
+(mcpp-index#163): `imgui@0.0.6` was ImGui 1.92.8, `ffmpeg@0.0.3` was FFmpeg
+8.1.2, `opencv@0.0.10` was OpenCV 5.0.0.
+
+| Change | Wrapper version |
 |---|---|
-| Wrapper fix on the same upstream checkpoint | Patch |
-| New upstream checkpoint or additive API/model/backend support | Minor |
-| Module/feature rename or intentional public API removal | Major |
+| New upstream checkpoint | that checkpoint's build number (`b10420`) |
+| Wrapper fix on the same upstream checkpoint | a dotted revision (`b10069.1`) |
+| Module/feature rename or intentional public API removal | a new checkpoint release, called out in the release notes |
 
-This policy applies before `1.0.0`: an upstream update cannot silently break a
-published module contract.
+**What this costs.** `bNNNNN` is not semver, so mcpp cannot express a RANGE over
+it — `^b10069` does not parse, and consumers pin exactly. Verified that exact
+pinning does work end to end: resolution, version-key matching and wire
+addressing all handle a literal non-semver key (mcpp#363 tracks range support).
+
+Since ordering is no longer comparable, the "major/minor/patch" contract above
+cannot be carried by the version string. An upstream update still may not
+silently break a published module contract — that guarantee now rests on the
+API snapshot gate and the release notes rather than on a version component.
 
 Every release records:
 
