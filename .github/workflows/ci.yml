@@ -381,19 +381,27 @@ jobs:
             || { echo "expected a refusal, mcpp exited ${status}"; exit 1; }
           grep -F "needs a libstdc++ toolchain" <<<"${out}"
           grep -F "backend-vulkan feature" <<<"${out}"
-          # If it had reached the compiler, ggml-vulkan.cpp would appear.
+          # "BEFORE ANYTHING COMPILES", ASSERTED ON THE STAGE, NOT ON A NAME.
           #
-          # WRITTEN AS `if`, NOT `grep -q ... && { ... }`. That form returns the
-          # GREP's status, and as the LAST command of a step that becomes the
-          # step's exit status -- so the well-behaved case (no match) would have
-          # failed the step. The step ends on an explicit success line for the
-          # same reason: a step's verdict should not be whatever its final
-          # expression happened to evaluate to.
-          if grep -qF "ggml-vulkan.cpp" <<<"${out}"; then
-            echo "the build reached the compiler; the refusal came too late"
+          # The first version searched the output for `ggml-vulkan.cpp` and
+          # treated a hit as "the compiler spoke". It failed, and correctly by
+          # its own logic: the REFUSAL NAMES THAT FILE, because naming it is how
+          # the message explains the cause. The criterion's object contained the
+          # very thing that produces it, so it read an explanation as evidence.
+          #
+          # What "before anything compiles" actually means is that mcpp stopped
+          # at the build-program stage, and the engine says so itself. That line
+          # is the assertion. The second check is independent of any wording: a
+          # build that reached the compiler prints a `Compiling <pkg>` progress
+          # line, and `build.mcpp compiling` does not match it (different word,
+          # lower case, no package).
+          grep -F "build.mcpp exited with 2 (build aborted)" <<<"${out}" \
+            || { echo "mcpp did not stop at the build program"; exit 1; }
+          if grep -qE '^[[:space:]]*Compiling ' <<<"${out}"; then
+            echo "a translation unit was compiled; the refusal came too late"
             exit 1
           fi
-          echo "OK: refused by name, and no translation unit was compiled"
+          echo "OK: refused by name, at the build program, with nothing compiled"
 
   release-contract:
     runs-on: ubuntu-24.04
