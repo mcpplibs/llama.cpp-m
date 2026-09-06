@@ -56,6 +56,19 @@ void replace_once(
     value.replace(first, marker.size(), replacement);
 }
 
+// `mcpp::warning` writes its message on ONE line -- the directive channel is
+// line-based -- so a message carrying a newline is truncated there and the rest
+// is silently discarded as non-directive output. Compiler diagnostics are
+// exactly the multi-line text one wants to quote in a warning, so they are
+// flattened before they go in.
+std::string one_line(std::string_view value, std::size_t limit) {
+    std::string out;
+    for (char c : value.substr(0, limit)) {
+        out.push_back((c == '\n' || c == '\r' || c == '\t') ? ' ' : c);
+    }
+    return out;
+}
+
 std::string asm_quote(std::string value) {
     std::string out;
     for (char c : value) {
@@ -192,7 +205,7 @@ bool glslc_supports(
                        + std::string(extension)
                        + " probe failed without saying the extension is "
                          "unsupported, so it is treated as unsupported: "
-                       + output.substr(0, 200)).c_str());
+                       + one_line(output, 200)).c_str());
     }
     return false;
 }
@@ -361,7 +374,9 @@ int emit_vulkan() {
                 .submit();
 
     // Every shader includes fragments from the same directory, and upstream
-    // tracks that with a depfile mcpp's action grammar has no place for. The
+    // tracks that with a depfile. The generator still writes one, next to each
+    // generated source; it is an undeclared side effect that nothing reads,
+    // because mcpp's action grammar has no depfile field. The
     // over-approximation -- every fragment is an input of every shader -- is
     // correct and costs a full shader rebuild when a fragment changes, which
     // in this repository happens once per upstream import.
