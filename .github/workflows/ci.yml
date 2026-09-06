@@ -280,6 +280,14 @@ jobs:
       # the shader compiler and the software device both arrive through
       # `[feature-xlings.backend-vulkan]` -- so the ICD path cannot be found
       # before it has run.
+      #
+      # The device payload carries `when = "dev"`, and that tier is scoped to
+      # the declaring package as ROOT rather than to a verb, so `mcpp build`
+      # requests it. Measured rather than read off the table: a fixture with a
+      # plain and a dev entry under one feature, built with
+      # MCPP_NO_AUTO_INSTALL=1, names both in its refusal. Had the tier been
+      # verb-scoped to run/test, the ICD search below would have found nothing
+      # and the job would have failed one step later, about the wrong thing.
       - name: Build the Vulkan backend
         run: |
           rm -rf target
