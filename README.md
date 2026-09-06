@@ -160,6 +160,22 @@ GGML_VK_VISIBLE_DEVICES=0 \
   mcpp test vulkan_decode --features backend-vulkan
 ```
 
+### What the artifact depends on
+
+Measured on the built test binary, everything outside the mcpp registry:
+
+```
+$ ldd target/*/*/bin/vulkan_decode | grep -v mcpp/registry
+	linux-vdso.so.1
+	libvulkan.so.1 => .../bin/libvulkan.so.1
+```
+
+The Khronos loader is built from source by `compat:vulkan` and travels beside
+the binary; the kernel's vDSO is the only thing left. The shader generator is
+statically linked for the same reason -- it runs from inside the build, and a
+build tool that needs the host's libstdc++ is a host dependency this ecosystem
+does not accept.
+
 The package test is stricter than a token in range: it decodes the same prompt
 twice from one model, once with every layer on the host and once with every
 layer offloaded, and requires greedy sampling to produce the SAME token. A
