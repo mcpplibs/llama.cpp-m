@@ -79,11 +79,23 @@ class BuildManifestContract(unittest.TestCase):
         # IS the upstream checkpoint, so it must agree with the build info the
         # manifest generates for ggml.
         self.assertEqual(package["namespace"], "ggml-org")
-        self.assertEqual(package["version"], "b10069")
+
+        # THE VERSION AND GGML_VERSION ARE TWO FACTS, AND A WRAPPER REVISION
+        # SEPARATES THEM. The package version may carry a dotted revision for a
+        # change on an unchanged checkpoint (`b10069.1`); GGML_VERSION is what
+        # ggml reports about ITSELF, so it stays the checkpoint. While the two
+        # coincided this was written as one assertion, and a revision bump
+        # would have quietly made the library claim to be a build that does
+        # not exist upstream.
+        version = package["version"]
+        self.assertRegex(version, r"^b\d+(\.[1-9]\d*)?$")
+        checkpoint = version.split(".")[0]
         self.assertIn(
-            f'#define GGML_VERSION "{package["version"]}"',
+            f'#define GGML_VERSION "{checkpoint}"',
             self.manifest["generated_files"]["generated/ggml_build_info.h"],
         )
+        lock = (ROOT / "upstream.lock").read_text(encoding="utf-8")
+        self.assertIn(f'"{checkpoint}"', lock)
         self.assertEqual(package["standard"], "c++23")
         self.assertIn("src/llamacpp.cppm", self.base_sources())
         self.assertEqual(self.manifest["targets"], {"llama": {"kind": "lib"}})

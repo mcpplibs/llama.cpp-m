@@ -14,7 +14,7 @@
 [package]
 namespace = "ggml-org"
 name = "llamacpp"
-version = "b10069"
+version = "b10069.1"
 description = "C++23 module package for llama.cpp b10069"
 license = "MIT"
 standard = "c++23"

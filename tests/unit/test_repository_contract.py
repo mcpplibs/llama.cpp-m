@@ -35,7 +35,12 @@ class RepositoryContractTest(unittest.TestCase):
         module = (ROOT / "src/llamacpp.cppm").read_text(encoding="utf-8")
         self.assertRegex(manifest, r'(?m)^namespace\s*=\s*"ggml-org"$')
         self.assertRegex(manifest, r'(?m)^name\s*=\s*"llamacpp"$')
-        self.assertRegex(manifest, r'(?m)^version\s*=\s*"b10069"$')
+        # The wrapper revision on an unchanged upstream checkpoint. The
+        # checkpoint the version NAMES is asserted separately below, so a
+        # revision bump cannot quietly change which upstream is vendored.
+        self.assertRegex(manifest, r'(?m)^version\s*=\s*"b10069(\.[1-9]\d*)?"$')
+        lock = (ROOT / "upstream.lock").read_text(encoding="utf-8")
+        self.assertIn('"b10069"', lock)
         self.assertIn("export module llamacpp;", module)
 
     def test_vendored_tree_is_not_locally_patched(self):
