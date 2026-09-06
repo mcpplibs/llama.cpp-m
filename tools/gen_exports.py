@@ -75,6 +75,30 @@ def _find_clang():
     raise RuntimeError("clang++ not found")
 
 
+def clang_identity() -> str:
+    """The compiler whose AST representation a snapshot holds.
+
+    THE SNAPSHOT IS NOT COMPILER-NEUTRAL. It stores clang's JSON `-ast-dump`
+    verbatim, and that representation moves between clang releases: a newer
+    clang writes `desugaredQualType` for struct fields where an older one
+    writes `qualType`, with no field, type or name changing. Comparing a
+    snapshot against a different clang therefore reports an API change that
+    did not happen.
+
+    Recording the compiler is what lets the comparison say so. It cannot make
+    the two agree -- only regenerating can -- but a failure that names the
+    likely cause is a different thing from one that asserts the wrong cause.
+    """
+    try:
+        result = subprocess.run(
+            [_find_clang(), "--version"],
+            capture_output=True, text=True, check=True,
+        )
+    except (OSError, subprocess.CalledProcessError, RuntimeError):
+        return "unknown"
+    return result.stdout.splitlines()[0].strip() if result.stdout else "unknown"
+
+
 def _scan_headers(upstream_dir, include_dirs=None):
     if include_dirs is None:
         include_dirs = [os.path.join(upstream_dir, "include"),
@@ -321,6 +345,7 @@ def _generate_typed_constants(macros):
 
 
 def collect_api_snapshot(upstream_dir, include_dirs=None):
+    generator = clang_identity()
     ast_data, macro_output, llama_lines = _scan_headers(
         upstream_dir, include_dirs
     )
@@ -378,6 +403,7 @@ def collect_api_snapshot(upstream_dir, include_dirs=None):
 
     return {
         "declarations": dict(sorted(declarations.items())),
+        "generator": generator,
         "macros": dict(sorted(macros.items())),
         "manual_decisions": sorted(manual_decisions),
         "typed_constants": _typed_constant_snapshot(macros),
