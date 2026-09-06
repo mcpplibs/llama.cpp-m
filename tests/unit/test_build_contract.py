@@ -350,6 +350,23 @@ class BuildHelperContract(unittest.TestCase):
             "MCPP_TARGET": "x86_64-unknown-linux-gnu",
         }
 
+    def test_vulkan_is_refused_outside_linux(self):
+        """The manifest says Linux only, so the program has to say it too.
+
+        A claim written in a comment is executed by nothing. Without this the
+        feature would be attempted on macOS and fail somewhere further in, with
+        a message about whatever broke first rather than about the platform.
+        """
+        for target_os, target_arch in (("macos", "aarch64"), ("windows", "x86_64")):
+            result = self.run_helper(
+                features=("backend-cpu", "backend-vulkan"),
+                target_os=target_os,
+                target_arch=target_arch,
+            )
+            with self.subTest(target_os=target_os):
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("Linux only", result.stderr)
+
     def test_vulkan_shader_generation_is_declared_not_performed(self):
         """134 shader sets are build-graph edges, not a loop in this program.
 

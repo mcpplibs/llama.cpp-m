@@ -180,6 +180,22 @@ std::string find_host_compiler() {
 }
 
 int emit_vulkan() {
+    // LINUX ONLY, AND REFUSED RATHER THAN ATTEMPTED ELSEWHERE.
+    //
+    // macOS already has `backend-metal`, and a Vulkan build there needs
+    // MoltenVK, which no package in this ecosystem delivers; Windows uses the
+    // system loader rather than the one `compat:vulkan` builds, and the
+    // capability probe below shells out with a redirection that has a
+    // different grammar there. None of that is verified, and a build program
+    // that tried anyway would fail somewhere further in, with a message about
+    // whatever broke first rather than about the platform.
+    if (std::string(mcpp::target_os()) != "linux") {
+        std::cerr << "ggml-org:llamacpp backend-vulkan is Linux only; this "
+                     "build targets " << mcpp::target_os()
+                  << ". On macOS use backend-metal.\n";
+        return 2;
+    }
+
     // The generator runs during the build, so it has to be a program this
     // machine can execute. Under cross-compilation the resolved toolchain
     // produces binaries for somewhere else, and a tool that cannot run is a
