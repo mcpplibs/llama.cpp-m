@@ -1,0 +1,16 @@
+# The consumer's whole diff for a Vulkan build is the feature name below.
+# Every payload the backend needs -- glslc for the shaders, the Khronos loader,
+# the SPIR-V headers, the adapter that lets a built artifact reach the machine's
+# own driver -- is declared by `ggml-org:llamacpp` under that feature, and a
+# consumer that does not name it acquires none of them.
+[package]
+name = "chat-vulkan"
+version = "0.1.0"
+standard = "c++23"
+
+[targets.chat-vulkan]
+kind = "bin"
+main = "src/main.cpp"
+
+[dependencies]
+llamacpp = { path = "../..", features = ["backend-vulkan"] }

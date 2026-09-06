@@ -27,7 +27,8 @@ REQUIRED_GGML_ENUM_MEMBERS = {
 
 REQUIRED_GGML_FUNCTIONS = {
     "ggml_add", "ggml_backend_alloc_ctx_tensors",
-    "ggml_backend_buffer_free", "ggml_backend_dev_init",
+    "ggml_backend_buffer_free", "ggml_backend_dev_description",
+    "ggml_backend_dev_init", "ggml_backend_dev_name",
     "ggml_backend_dev_type", "ggml_backend_free",
     "ggml_backend_graph_compute", "ggml_backend_reg_by_name",
     "ggml_backend_reg_dev_count", "ggml_backend_reg_dev_get",

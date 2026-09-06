@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 env:
-  MCPP_VERSION: "2026.8.5.4"
+  MCPP_VERSION: "2026.9.6.2"
   MCPP_RELEASE_BASE: https://github.com/mcpp-community/mcpp/releases/download
 
 jobs:
@@ -36,7 +36,20 @@ jobs:
           (cd "${RUNNER_TEMP}" && sha256sum -c "${asset}.sha256")
           tar -xzf "${RUNNER_TEMP}/${asset}" -C "${RUNNER_TEMP}"
           echo "${RUNNER_TEMP}/${wrapper}/bin" >> "${GITHUB_PATH}"
+      # BEFORE the unit tests, and that order is load-bearing.
+      # `tests/unit/test_build_contract.py` runs the build program mcpp
+      # compiled, because `build.mcpp` is a modules program that a plain `c++`
+      # cannot build. LLAMACPP_REQUIRE_BUILD_HELPER below turns "the binary is
+      # missing" from a skip into a failure, so a job that lost this ordering
+      # says so instead of passing with nothing measured.
+      - name: Cold CPU package build
+        run: |
+          rm -rf target
+          mcpp --version | grep -F "${MCPP_VERSION}"
+          mcpp build --strict --no-cache
       - name: Unit and repository checks
+        env:
+          LLAMACPP_REQUIRE_BUILD_HELPER: "1"
         run: python3 -m unittest discover -s tests/unit -p 'test_*.py' -v
       - name: Verify vendored upstream and generated API
         env:
@@ -45,11 +58,6 @@ jobs:
           python3 tools/import_upstream.py --lock upstream.lock --check --verify-tag
           python3 tools/gen_exports.py --check
           python3 tools/audit_snapshot.py --check snapshots/b10069.json
-      - name: Cold CPU package build
-        run: |
-          rm -rf target
-          mcpp --version | grep -F "${MCPP_VERSION}"
-          mcpp build --strict --no-cache
 
   cpu:
     name: cpu (${{ matrix.os }})
@@ -238,9 +246,77 @@ jobs:
           grep -F "using embedded metal library" metal.log
           grep -E "offloaded [1-9][0-9]*/[1-9][0-9]* layers to GPU" metal.log
 
+  vulkan:
+    # NO GPU, AND THAT IS THE POINT. The device is Mesa's lavapipe, delivered
+    # as a payload by `[feature-xlings.backend-vulkan]`, so this job measures
+    # the backend rather than the runner's hardware. A machine with a discrete
+    # GPU runs the same test against that instead; the test asserts a device
+    # exists and computes correctly, never which device it is.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install pinned mcpp
+        shell: bash
+        run: |
+          set -euo pipefail
+          asset="mcpp-${MCPP_VERSION}-linux-x86_64.tar.gz"
+          wrapper="${asset%.tar.gz}"
+          url="${MCPP_RELEASE_BASE}/v${MCPP_VERSION}/${asset}"
+          curl --fail --location --retry 5 --retry-all-errors \
+            --retry-delay 2 --output "${RUNNER_TEMP}/${asset}" "${url}"
+          curl --fail --location --retry 5 --retry-all-errors \
+            --retry-delay 2 --output "${RUNNER_TEMP}/${asset}.sha256" \
+            "${url}.sha256"
+          (cd "${RUNNER_TEMP}" && sha256sum -c "${asset}.sha256")
+          tar -xzf "${RUNNER_TEMP}/${asset}" -C "${RUNNER_TEMP}"
+          echo "${RUNNER_TEMP}/${wrapper}/bin" >> "${GITHUB_PATH}"
+      - name: Fetch pinned model
+        run: python3 tests/support/fetch_model.py --output "${RUNNER_TEMP}/stories15M.gguf"
+      # The build comes first because it is what PROVISIONS the payloads --
+      # the shader compiler and the software device both arrive through
+      # `[feature-xlings.backend-vulkan]` -- so the ICD path cannot be found
+      # before it has run.
+      - name: Build the Vulkan backend
+        run: |
+          rm -rf target
+          mcpp --version | grep -F "${MCPP_VERSION}"
+          mcpp build --features backend-vulkan --strict
+      - name: Real Vulkan inference on a software device
+        shell: bash
+        run: |
+          set -euo pipefail
+          lavapipe="$(find "${HOME}/.mcpp/registry/data/xpkgs/xim-x-mesa-lavapipe" \
+            -name 'lvp_icd.*.json' -print -quit)"
+          test -n "${lavapipe}"
+          echo "using ICD ${lavapipe}"
+          # GGML_VK_VISIBLE_DEVICES IS NOT A WORKAROUND, IT IS THE SELECTOR.
+          # ggml keeps only Vulkan devices whose type is not `eCpu`, so a
+          # software implementation is dropped for its type alone -- lavapipe
+          # advertises every feature the backend requires and is still
+          # excluded. Upstream's own escape hatch names a device by index,
+          # which is what a runner with no GPU has to use.
+          GGML_VK_VISIBLE_DEVICES=0 \
+          VK_DRIVER_FILES="${lavapipe}" \
+          LLAMACPP_TEST_MODEL="${RUNNER_TEMP}/stories15M.gguf" \
+            mcpp test vulkan_decode --features backend-vulkan --strict \
+            2>&1 | tee vulkan.log
+          grep -F "LLAMACPP_VULKAN_TEST=PASS" vulkan.log
+          grep -E "offloaded [1-9][0-9]*/[1-9][0-9]* layers to GPU" vulkan.log
+      - name: The shader pipeline is declared, not performed
+        env:
+          LLAMACPP_REQUIRE_BUILD_HELPER: "1"
+          LLAMACPP_REQUIRE_VULKAN_HELPER: "1"
+        run: |
+          python3 -m unittest discover -s tests/unit \
+            -p 'test_build_contract.py' -v
+
   release-contract:
     runs-on: ubuntu-24.04
-    needs: [unit-and-import, cpu, linux-arm64, metal]
+    needs: [unit-and-import, cpu, linux-arm64, metal, vulkan]
     steps:
       - uses: actions/checkout@v4
         with:
