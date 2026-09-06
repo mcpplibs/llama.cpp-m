@@ -7,36 +7,40 @@ module for mcpp. The public module is:
 import llamacpp;
 ```
 
-The package version IS llama.cpp's build number: `b10069`. CPU is the default
-backend. Metal is an additive feature for macOS ARM64.
+The package version IS llama.cpp's build number, plus this packaging's own
+revision of it: `b10069.2`. CPU is the default backend; Metal is an additive
+feature for macOS ARM64 and Vulkan an additive feature for Linux. Consumers pin
+exactly -- `b10069` is not semver, so no range expresses "b10069 or later" --
+which means a consumer wanting a feature names the revision that has it.
+`backend-vulkan` arrived in `b10069.1`.
 
 ## Add The Package
 
-After `b10069` is published in mcpp-index:
+After `b10069.2` is published in mcpp-index:
 
 ```bash
-mcpp add ggml-org:llamacpp@b10069
+mcpp add ggml-org:llamacpp@b10069.2
 ```
 
 The equivalent manifest entry is:
 
 ```toml
 [dependencies.ggml-org]
-llamacpp = "b10069"
+llamacpp = "b10069.2"
 ```
 
 For Metal on macOS ARM64:
 
 ```toml
 [dependencies.ggml-org]
-llamacpp = { version = "b10069", features = ["backend-metal"] }
+llamacpp = { version = "b10069.2", features = ["backend-metal"] }
 ```
 
 For Vulkan on Linux:
 
 ```toml
 [dependencies.ggml-org]
-llamacpp = { version = "b10069", features = ["backend-vulkan"] }
+llamacpp = { version = "b10069.2", features = ["backend-vulkan"] }
 ```
 
 That line is the whole diff. The shader compiler, the Khronos loader, the
@@ -163,6 +167,13 @@ libc++ has a static assertion for it and libstdc++ does not. It is upstream's
 source rather than this packaging, and nothing in a build program can repair
 it without patching the vendored tree, which this repository does not do.
 
+`build.mcpp` therefore refuses the combination and says so, instead of letting
+the compiler produce a page of template diagnostics about a header the reader
+did not write. The refusal became possible with mcpp 2026.9.6.3, which added
+`mcpp::cxx_stdlib()`; the only signal available before that was the compiler's
+NAME, and refusing on it would also have refused clang configured against
+libstdc++, which builds this backend correctly.
+
 Everything else is unaffected: the CPU backend builds under both standard
 libraries, measured.
 
@@ -206,15 +217,18 @@ before the tokens are compared.
 
 ## Supported Boundary
 
-`b10069` includes:
+`b10069.2` includes:
 
 - the public llama.cpp C API exposed through `import llamacpp;`;
 - the CPU backend on Linux x86_64, Linux ARM64, Windows x86_64, and macOS ARM64;
 - the Metal backend on macOS ARM64;
+- the Vulkan backend on Linux, under `backend-vulkan`, with a libstdc++
+  toolchain (a libc++ one is refused by name, for the upstream reason recorded
+  above);
 - architecture-specific x86_64 and ARM64 CPU source selection.
 
-`b10069` does not include `mtmd`, CUDA, Vulkan, RPC, or other upstream backends.
-It also does not claim that every upstream model architecture has been tested.
+It does not include `mtmd`, CUDA, RPC, or other upstream backends. It also does
+not claim that every upstream model architecture has been tested.
 Deprecated upstream C APIs remain exported for API completeness; code that
 calls them may receive the deprecation warnings defined by upstream.
 

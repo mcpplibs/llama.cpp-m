@@ -11,10 +11,17 @@
 # matching and wire addressing all work on a literal non-semver key. What it
 # cannot do is RANGES over it (`^b10069` is not expressible), so consumers pin
 # exactly. See mcpp#363; rule and migration table in mcpp-index#163.
+#
+# The fourth segment is this PACKAGING's revision of that checkpoint, and it
+# moves when the packaging changes without the upstream tree changing:
+# `b10069.1` added `backend-vulkan`, `b10069.2` refuses a libc++ toolchain for
+# it by name. Consumers pin exactly, so a consumer wanting a feature must name
+# the revision that has it -- which is why every version in the README moves
+# with this line rather than staying at the bare checkpoint.
 [package]
 namespace = "ggml-org"
 name = "llamacpp"
-version = "b10069.1"
+version = "b10069.2"
 description = "C++23 module package for llama.cpp b10069"
 license = "MIT"
 standard = "c++23"
@@ -300,10 +307,11 @@ backend-cpu = {}
 # destroys a `std::unique_ptr<vk_memory_logger>` where that class is only
 # forward-declared; libc++ has a static assertion for it and libstdc++ does
 # not. That is upstream's source, not this packaging, and no build program can
-# repair it without patching the vendored tree. Not refused here, because the
-# distinction a refusal would need -- which C++ standard library the project
-# resolved -- is not something mcpp hands a build program; guessing it from the
-# compiler's name would refuse clang with libstdc++, which works.
+# repair it without patching the vendored tree. `build.mcpp` refuses it by
+# name: mcpp 2026.9.6.3 added `mcpp::cxx_stdlib()`, which answers WHICH C++
+# standard library resolved. Before that the only available signal was the
+# compiler's name, and refusing on it would also have refused clang configured
+# against libstdc++, which builds this backend correctly.
 [features.backend-vulkan]
 sources = ["third_party/llama.cpp/ggml/src/ggml-vulkan/ggml-vulkan.cpp"]
 defines = ["LLAMACPP_VULKAN_TEST=1"]

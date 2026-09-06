@@ -275,6 +275,33 @@ int emit_vulkan() {
         return 2;
     }
 
+    // AND A libstdc++ TOOLCHAIN, REFUSED BY NAME RATHER THAN DISCOVERED BY
+    // THE COMPILER.
+    //
+    // Upstream's `ggml-vulkan.cpp` destroys a `std::unique_ptr<vk_memory_logger>`
+    // at line 1015 while the class is defined at line 1920. Destroying a
+    // `unique_ptr` to an incomplete type is undefined behaviour; libc++ has a
+    // static assertion for it and libstdc++ does not. It is upstream's source
+    // rather than this packaging, and no build program can repair it without
+    // patching the vendored tree, which this repository does not do.
+    //
+    // Until mcpp 2026.9.6.3 this could not be refused. The only signal a build
+    // program had was `mcpp::compiler()`, which answers "clang" for both
+    // implementations -- refusing on it would also refuse clang with
+    // libstdc++, which builds this backend correctly. `mcpp::cxx_stdlib()`
+    // answers the question that is actually being asked.
+    if (std::string(mcpp::cxx_stdlib()) == "libc++") {
+        std::cerr << "ggml-org:llamacpp backend-vulkan needs a libstdc++ "
+                     "toolchain; this build resolved libc++.\n"
+                     "  Upstream's ggml-vulkan.cpp destroys a std::unique_ptr to "
+                     "an incomplete type, which libc++ rejects by static "
+                     "assertion and libstdc++ accepts.\n"
+                     "  Select a libstdc++ toolchain (mcpp's gcc payload, or a "
+                     "clang configured against libstdc++), or build without the "
+                     "backend-vulkan feature.\n";
+        return 2;
+    }
+
     // The generator runs during the build, so it has to be a program this
     // machine can execute. Under cross-compilation the resolved toolchain
     // produces binaries for somewhere else, and a tool that cannot run is a
