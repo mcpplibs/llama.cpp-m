@@ -378,10 +378,34 @@ int emit_vulkan() {
     // runtime is a host dependency this ecosystem does not accept. How that is
     // spelled depends on the compiler -- see `host_compiler` above.
     const fs::path generator = out / "vulkan-shaders-gen";
+    // THE SECOND COMPILER MUST BE TOLD WHERE IT IS.
+    //
+    // It starts knowing nothing about the environment mcpp placed it in: the C
+    // library is not at /usr/include and the assembler is not at /usr/bin.
+    // `mcpp::toolchain_sysroot()` and `mcpp::toolchain_binutils_dir()` are the
+    // `--sysroot` and `-B` mcpp passes to its OWN compiler for this target, and
+    // forwarding them is what makes the two see the same thing. docs/07
+    // "Driving a second compiler" states this, and the failure it names is
+    // exactly the one this omission produced:
+    //
+    //   fatal error: features.h: No such file or directory
+    //
+    // WHY IT WAS GREEN LOCALLY, WHICH IS THE WORSE HALF. Without the sysroot,
+    // gcc's last resort is whatever `/usr/include`-shaped directory it was
+    // configured with, and on the machine this was written on that resolved to
+    // a SubOS belonging to an unrelated checkout. So the build succeeded here
+    // by reading a header from outside the ecosystem -- the dependency this
+    // ecosystem exists to remove -- and only a clean runner, which has no such
+    // directory, reported it.
+    const std::string sysroot = mcpp::toolchain_sysroot();
+    const std::string binutils = mcpp::toolchain_binutils_dir();
+
     std::vector<std::string> build_command = {
         compiler.path, "-std=c++17", "-O2", "-pthread",
         compiler.is_clang ? "-static-libstdc++" : "-static",
     };
+    if (!sysroot.empty())  build_command.push_back("--sysroot=" + sysroot);
+    if (!binutils.empty()) build_command.push_back("-B" + binutils);
     for (const std::string & define : defines) build_command.push_back("-D" + define);
     build_command.push_back(generator_source.string());
     // After the translation unit: a static archive only supplies what has

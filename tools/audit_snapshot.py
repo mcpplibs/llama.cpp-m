@@ -604,7 +604,20 @@ def main() -> int:
         print(f"Snapshot written to {output}", file=sys.stderr)
     elif args.check:
         assert expected is not None
-        if expected == report:
+        # `generator` IS METADATA AND MUST NOT DECIDE THE COMPARISON. It records
+        # which clang wrote the snapshot so that a drift report can name the
+        # likely cause; a snapshot written before the field existed has none,
+        # and a fresh report always does. A whole-dict equality therefore
+        # reported "Snapshot differs" with an EMPTY drift report -- every
+        # category empty, nothing to act on, and CI red. Measured in
+        # llama.cpp-m CI the first time the field shipped.
+        #
+        # `compare_reports` below already lists the keys that decide, and
+        # `generator` is deliberately not among them; this makes the fast path
+        # agree with it instead of being stricter for no reason.
+        comparable = {k: v for k, v in report.items() if k != 'generator'}
+        expected_comparable = {k: v for k, v in expected.items() if k != 'generator'}
+        if expected_comparable == comparable:
             print("Snapshot matches.", file=sys.stderr)
         else:
             drift = classify_api_drift(

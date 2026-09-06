@@ -341,7 +341,15 @@ class BuildHelperContract(unittest.TestCase):
         ]
         if not toolchains:
             return None
+        # The two answers mcpp gives its own compiler for this target, which a
+        # build program driving a SECOND compiler has to forward.
+        sysroot = home / "registry/subos/default"
+        binutils = sorted((store / "xim-x-binutils").glob("*/bin"))
+        if not sysroot.is_dir() or not binutils:
+            return None
         return {
+            "MCPP_TOOLCHAIN_SYSROOT": str(sysroot),
+            "MCPP_TOOLCHAIN_BINUTILS_DIR": str(binutils[-1]),
             "MCPP_XPKG_XIM_SHADERC_DIR": str(shaderc[-1]),
             "MCPP_TOOLCHAIN_DIR": str(toolchains[-1]),
             # The program refuses to cross-compile, and equal values are what
@@ -395,6 +403,8 @@ class BuildHelperContract(unittest.TestCase):
                 raise AssertionError(message)
             self.skipTest(message)
 
+        environment_sysroot = environment["MCPP_TOOLCHAIN_SYSROOT"]
+        environment_binutils = environment["MCPP_TOOLCHAIN_BINUTILS_DIR"]
         result = self.run_helper(
             features=("backend-cpu", "backend-vulkan"),
             target_os="linux",
@@ -405,6 +415,24 @@ class BuildHelperContract(unittest.TestCase):
 
         actions = re.findall(r"(?m)^mcpp:action=", result.stdout)
         self.assertEqual(len(actions), len(shaders) + 2, result.stdout)
+
+        # THE SECOND COMPILER IS TOLD WHERE IT IS, and this assertion exists
+        # because its absence was green on a developer machine. Without
+        # `--sysroot`, gcc falls back to whatever `/usr/include`-shaped
+        # directory it was configured with; on the machine this was written on
+        # that resolved to a SubOS belonging to an unrelated checkout, so the
+        # generator compiled against a C library from OUTSIDE the ecosystem and
+        # only a clean runner reported `features.h: No such file or directory`.
+        #
+        # The earlier check looked at the C++ standard library alone, which was
+        # genuinely coming from the payload -- the C library is a second
+        # question and it had no criterion.
+        generator_action = next(
+            line for line in result.stdout.splitlines()
+            if line.startswith("mcpp:action=") and "shaders-gen" in line
+        )
+        self.assertIn("--sysroot=" + environment_sysroot, generator_action)
+        self.assertIn("-B" + environment_binutils, generator_action)
 
         written = list(Path(self.temp.name).rglob("*.comp.cpp"))
         self.assertEqual(written, [], "the program generated sources itself")
