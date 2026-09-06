@@ -266,7 +266,10 @@ jobs:
       # only when nobody moved mcpp. The ICD search below looked there and
       # found nothing, while the payloads sat under $RUNNER_TEMP. Naming the
       # home makes the step and the search agree by construction, which is what
-      # the linux-arm64 job below already does.
+      # MCPP_VENDORED_XLINGS TRAVELS WITH IT. Moving the home moves the place
+      # mcpp looks for its bundled xlings, and it exits 2 naming the variable.
+      # The linux-arm64 job below sets both; taking only the first line of a
+      # two-line pattern is what this comment exists to stop.
       MCPP_HOME: /tmp/llamacpp-vulkan-mcpp-home
     steps:
       - uses: actions/checkout@v4
@@ -288,6 +291,8 @@ jobs:
           (cd "${RUNNER_TEMP}" && sha256sum -c "${asset}.sha256")
           tar -xzf "${RUNNER_TEMP}/${asset}" -C "${RUNNER_TEMP}"
           echo "${RUNNER_TEMP}/${wrapper}/bin" >> "${GITHUB_PATH}"
+          echo "MCPP_VENDORED_XLINGS=${RUNNER_TEMP}/${wrapper}/registry/bin/xlings" \
+            >> "${GITHUB_ENV}"
       - name: Fetch pinned model
         run: python3 tests/support/fetch_model.py --output "${RUNNER_TEMP}/stories15M.gguf"
       # The build comes first because it is what PROVISIONS the payloads --
