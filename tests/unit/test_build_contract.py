@@ -328,6 +328,11 @@ class BuildHelperContract(unittest.TestCase):
         versions here would turn an ecosystem bump into a failing test about
         features.
         """
+        # `MCPP_HOME` when the caller named one, and only then the default.
+        # A released mcpp resolves its home from its OWN location, so
+        # `~/.mcpp` is where the payloads are only when nobody moved mcpp --
+        # measured, twice, once as a test failing about features while really
+        # measuring a path and once as a CI step finding no ICD.
         home = Path(os.environ.get("MCPP_HOME", Path.home() / ".mcpp"))
         store = home / "registry/data/xpkgs"
         shaderc = sorted((store / "xim-x-shaderc").glob("*"))

@@ -259,6 +259,15 @@ jobs:
     # exists and computes correctly, never which device it is.
     runs-on: ubuntu-24.04
     timeout-minutes: 90
+    env:
+      # THE STORE LOCATION IS A DECISION, NOT A FACT TO DISCOVER. A released
+      # mcpp resolves its home from its OWN location -- the extracted tarball
+      # carries a `registry/` -- so `${HOME}/.mcpp` is where the payloads are
+      # only when nobody moved mcpp. The ICD search below looked there and
+      # found nothing, while the payloads sat under $RUNNER_TEMP. Naming the
+      # home makes the step and the search agree by construction, which is what
+      # the linux-arm64 job below already does.
+      MCPP_HOME: /tmp/llamacpp-vulkan-mcpp-home
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -302,7 +311,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          lavapipe="$(find "${HOME}/.mcpp/registry/data/xpkgs/xim-x-mesa-lavapipe" \
+          lavapipe="$(find "${MCPP_HOME}/registry/data/xpkgs/xim-x-mesa-lavapipe" \
             -name 'lvp_icd.*.json' -print -quit)"
           test -n "${lavapipe}"
           echo "using ICD ${lavapipe}"
