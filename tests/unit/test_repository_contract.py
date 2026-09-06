@@ -14,21 +14,33 @@ class RepositoryContractTest(unittest.TestCase):
             self.assertTrue((ROOT / name).is_file(), name)
 
     def test_no_submodule_or_consumer_time_upstream_fetch(self):
+        """A consumer's build reaches no network and no upstream checkout.
+
+        The upstream tree is VENDORED, so a build must not fetch it. This test
+        used to carry a blanket ban on process-launching calls as well, which
+        made it a second copy of a rule that already lives -- with its
+        reasoning -- in test_build_contract.py. The copies then disagreed: the
+        build program legitimately asks the shader compiler which extensions
+        it supports, and the ban here would have refused that while the name
+        of this test promised something else entirely. A rule stated twice is
+        a rule that will be changed once.
+        """
         self.assertFalse((ROOT / ".gitmodules").exists())
         build_helper = (ROOT / "build.mcpp").read_text(encoding="utf-8")
-        self.assertNotRegex(
-            build_helper,
-            r"\b(system|popen|exec[lv]?[pe]?|posix_spawn[p]?)\s*\(",
-        )
-        self.assertNotIn("urllib", build_helper)
-        self.assertNotIn("curl", build_helper)
+        for fetcher in ("urllib", "curl", "wget", "git clone", "https://"):
+            self.assertNotIn(fetcher, build_helper, fetcher)
 
     def test_package_and_module_identity(self):
         manifest = (ROOT / "mcpp.toml").read_text(encoding="utf-8")
         module = (ROOT / "src/llamacpp.cppm").read_text(encoding="utf-8")
         self.assertRegex(manifest, r'(?m)^namespace\s*=\s*"ggml-org"$')
         self.assertRegex(manifest, r'(?m)^name\s*=\s*"llamacpp"$')
-        self.assertRegex(manifest, r'(?m)^version\s*=\s*"b10069"$')
+        # The wrapper revision on an unchanged upstream checkpoint. The
+        # checkpoint the version NAMES is asserted separately below, so a
+        # revision bump cannot quietly change which upstream is vendored.
+        self.assertRegex(manifest, r'(?m)^version\s*=\s*"b10069(\.[1-9]\d*)?"$')
+        lock = (ROOT / "upstream.lock").read_text(encoding="utf-8")
+        self.assertIn('"b10069"', lock)
         self.assertIn("export module llamacpp;", module)
 
     def test_vendored_tree_is_not_locally_patched(self):

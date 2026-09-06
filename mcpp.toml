@@ -14,7 +14,7 @@
 [package]
 namespace = "ggml-org"
 name = "llamacpp"
-version = "b10069"
+version = "b10069.1"
 description = "C++23 module package for llama.cpp b10069"
 license = "MIT"
 standard = "c++23"
@@ -286,6 +286,57 @@ ldflags = ["-ladvapi32"]
 [features]
 default = { implies = ["backend-cpu"] }
 backend-cpu = {}
+
+# The Vulkan backend. Two files of this repository's own and 134 shader sets
+# that a generator in the vendored tree produces; `build.mcpp` declares that
+# generation as build-graph edges rather than performing it.
+#
+# LINUX ONLY, and stated rather than attempted. macOS already has
+# `backend-metal`, and a Vulkan build there needs MoltenVK, which no package in
+# this ecosystem delivers; Windows needs the system loader rather than the one
+# `compat:vulkan` builds. `build.mcpp` refuses both with the reason.
+#
+# AND A libstdc++ TOOLCHAIN, on this checkpoint. Upstream's ggml-vulkan.cpp
+# destroys a `std::unique_ptr<vk_memory_logger>` where that class is only
+# forward-declared; libc++ has a static assertion for it and libstdc++ does
+# not. That is upstream's source, not this packaging, and no build program can
+# repair it without patching the vendored tree. Not refused here, because the
+# distinction a refusal would need -- which C++ standard library the project
+# resolved -- is not something mcpp hands a build program; guessing it from the
+# compiler's name would refuse clang with libstdc++, which works.
+[features.backend-vulkan]
+sources = ["third_party/llama.cpp/ggml/src/ggml-vulkan/ggml-vulkan.cpp"]
+defines = ["LLAMACPP_VULKAN_TEST=1"]
+flags = [
+  # The registry compiles the backend in only when it is told the backend
+  # exists. Without this the library builds, links, and reports no Vulkan
+  # device -- a failure with no error in it.
+  { glob = "third_party/llama.cpp/ggml/src/ggml-backend-reg.cpp", defines = ["GGML_USE_VULKAN"] },
+]
+
+# Resolved only when the feature is active, which is what keeps a CPU-only
+# consumer free of every one of them.
+#
+#   vulkan          the Khronos loader this program links; it dispatches into
+#                   whatever ICD the machine advertises.
+#   spirv-headers   ggml-vulkan.cpp READS the modules its own generator
+#                   produced, so it needs the opcode definitions -- separate
+#                   from the Vulkan headers upstream and here.
+#   vulkan-runtime  the adapter. An mcpp artifact runs under mcpp's own loader,
+#                   which does not consult /usr/lib, so a bare-soname dlopen of
+#                   the host's ICD from inside the program finds nothing.
+[feature-deps.backend-vulkan]
+compat.vulkan = "1.4.357.0"
+compat.spirv-headers = "1.4.357.0"
+compat.vulkan-runtime = "2026.09.07"
+
+# shaderc carries glslc, which upstream's generator drives by name and whose
+# flags are not glslang's. mesa-lavapipe is a Vulkan device that needs no GPU;
+# `when = "dev"` keeps it out of every consumer's install, because it exists so
+# that THIS repository's own test has a device to run on.
+[feature-xlings.backend-vulkan]
+"xim:shaderc" = "2026.3"
+"xim:mesa-lavapipe" = { version = "26.2.1", when = "dev" }
 
 [features.backend-metal]
 sources = [

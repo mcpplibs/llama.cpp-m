@@ -1,28 +1,49 @@
-#include <cstdio>
-#include <cstdlib>
-#include <filesystem>
-#include <fstream>
-#include <iterator>
-#include <sstream>
-#include <stdexcept>
-#include <string>
+// The build program for the C++23 module layer over llama.cpp.
+//
+// Two backends need work that a declarative manifest cannot express, and they
+// need it for opposite reasons.
+//
+// Metal embeds a shader library into the artifact: one source file is
+// assembled here and handed to the compiler. The work is small, fixed and
+// serial, so the program does it directly.
+//
+// Vulkan compiles 134 shader sets through a generator that upstream keeps in
+// its own tree. That work is neither small nor fixed, so the program DECLARES
+// it: one build-graph edge per shader, plus one for the generator and one for
+// the header they share. Declaring is what makes each shader incremental,
+// parallel, and attributable to the edge that failed rather than to
+// "build.mcpp exited 1".
+
+import std;
+import mcpp;
 
 namespace fs = std::filesystem;
 
-static std::string read_all(const fs::path & path) {
+namespace {
+
+// The features this package knows. A name outside the set is an error rather
+// than a no-op: a misspelt feature that silently does nothing is a backend the
+// consumer believes is on.
+constexpr std::string_view kFeatures[] = {
+    "backend-cpu",
+    "backend-metal",
+    "backend-vulkan",
+};
+
+std::string read_all(const fs::path & path) {
     std::ifstream in(path, std::ios::binary);
     if (!in) throw std::runtime_error("cannot read " + path.string());
     return {std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()};
 }
 
-static void write_all(const fs::path & path, const std::string & value) {
+void write_all(const fs::path & path, const std::string & value) {
     fs::create_directories(path.parent_path());
     std::ofstream out(path, std::ios::binary | std::ios::trunc);
     out.write(value.data(), static_cast<std::streamsize>(value.size()));
     if (!out) throw std::runtime_error("cannot write " + path.string());
 }
 
-static void replace_once(
+void replace_once(
     std::string & value,
     const std::string & marker,
     const std::string & replacement
@@ -35,7 +56,20 @@ static void replace_once(
     value.replace(first, marker.size(), replacement);
 }
 
-static std::string asm_quote(std::string value) {
+// `mcpp::warning` writes its message on ONE line -- the directive channel is
+// line-based -- so a message carrying a newline is truncated there and the rest
+// is silently discarded as non-directive output. Compiler diagnostics are
+// exactly the multi-line text one wants to quote in a warning, so they are
+// flattened before they go in.
+std::string one_line(std::string_view value, std::size_t limit) {
+    std::string out;
+    for (char c : value.substr(0, limit)) {
+        out.push_back((c == '\n' || c == '\r' || c == '\t') ? ' ' : c);
+    }
+    return out;
+}
+
+std::string asm_quote(std::string value) {
     std::string out;
     for (char c : value) {
         if (c == '\\' || c == '"') out.push_back('\\');
@@ -44,50 +78,45 @@ static std::string asm_quote(std::string value) {
     return out;
 }
 
-static int validate_features() {
+int validate_features() {
     const char * raw = std::getenv("MCPP_FEATURES");
     if (!raw || *raw == '\0') return 0;
     std::istringstream input(raw);
     std::string feature;
     while (std::getline(input, feature, ',')) {
-        if (feature.empty()
-            || feature == "backend-cpu"
-            || feature == "backend-metal") {
+        if (feature.empty()) continue;
+        if (std::ranges::find(kFeatures, feature) != std::ranges::end(kFeatures)) {
             continue;
         }
-        std::fprintf(
-            stderr,
-            "mcpplibs:llamacpp: unsupported feature '%s' "
-            "(supported features: backend-cpu, backend-metal)\n",
-            feature.c_str()
-        );
+        std::string supported;
+        for (std::string_view name : kFeatures) {
+            if (!supported.empty()) supported += ", ";
+            supported += name;
+        }
+        std::cerr << "ggml-org:llamacpp: unsupported feature '" << feature
+                  << "' (supported features: " << supported << ")\n";
         return 2;
     }
     return 0;
 }
 
-int main() try {
-    if (int result = validate_features(); result != 0) return result;
-    const char * enabled = std::getenv("MCPP_FEATURE_BACKEND_METAL");
-    if (!enabled || std::string(enabled) != "1") return 0;
+// ---------------------------------------------------------------- Metal ----
 
-    const char * os = std::getenv("MCPP_TARGET_OS");
-    const char * arch = std::getenv("MCPP_TARGET_ARCH");
-    const char * manifest = std::getenv("MCPP_MANIFEST_DIR");
-    const char * out_env = std::getenv("MCPP_OUT_DIR");
-    if (!os || std::string(os) != "macos") {
-        std::fprintf(stderr, "mcpplibs:llamacpp requires target_os=macos\n");
+int emit_metal() {
+    const char * os = mcpp::target_os();
+    const char * arch = mcpp::target_arch();
+    const std::string manifest = mcpp::manifest_dir();
+    const std::string out_env = mcpp::out_dir();
+    if (std::string(os) != "macos") {
+        std::cerr << "ggml-org:llamacpp backend-metal requires target_os=macos\n";
         return 2;
     }
-    if (!arch || std::string(arch) != "aarch64") {
-        std::fprintf(stderr, "mcpplibs:llamacpp requires target_arch=aarch64\n");
+    if (std::string(arch) != "aarch64") {
+        std::cerr << "ggml-org:llamacpp backend-metal requires target_arch=aarch64\n";
         return 2;
     }
-    if (!manifest || !out_env) {
-        std::fprintf(
-            stderr,
-            "mcpplibs:llamacpp requires MCPP_MANIFEST_DIR and MCPP_OUT_DIR\n"
-        );
+    if (manifest.empty() || out_env.empty()) {
+        std::cerr << "ggml-org:llamacpp requires MCPP_MANIFEST_DIR and MCPP_OUT_DIR\n";
         return 2;
     }
 
@@ -116,14 +145,368 @@ int main() try {
          << "_ggml_metallib_end:\n";
     write_all(assembly, body.str());
 
-    std::printf("mcpp:generated=%s\n", assembly.string().c_str());
-    std::printf("mcpp:cfg=GGML_METAL_EMBED_LIBRARY\n");
+    mcpp::generated(assembly.string().c_str());
+    mcpp::define("GGML_METAL_EMBED_LIBRARY");
     for (const fs::path & input : {common, metal, impl}) {
-        std::printf("mcpp:rerun-if-changed=%s\n", input.string().c_str());
+        mcpp::rerun_if_changed(input.string().c_str());
     }
-    std::fflush(stdout);
+    return 0;
+}
+
+// --------------------------------------------------------------- Vulkan ----
+
+// One glslc extension probe. Which extensions a glslc accepts is a property of
+// how it was BUILT, not of its version, so the question is asked by compiling a
+// shader that uses the extension and reading what comes back.
+//
+// COMPILING IS THE ANSWER; THE REFUSAL MESSAGE ONLY EXPLAINS IT. Upstream's
+// CMake decides on the message alone -- absent means supported -- which reports
+// SUPPORTED for a probe that failed for any other reason: a renamed test
+// shader, a glslc that cannot start, a full disk. Claiming a capability that
+// was never verified is the direction that produces a broken build far away
+// from here, so a probe that did not answer the question is treated as "not
+// supported" and says so.
+//
+// Measured on shaderc 2026.3: all seven probes exit 0, so this is the same
+// answer upstream's rule gives on a working toolchain.
+bool glslc_supports(
+    const std::string & glslc,
+    const fs::path & shader,
+    std::string_view extension,
+    const fs::path & scratch
+) {
+    if (!fs::exists(shader)) {
+        mcpp::warning((std::string("backend-vulkan: no feature test for ")
+                       + std::string(extension) + " at " + shader.string()
+                       + "; treating the extension as unsupported").c_str());
+        return false;
+    }
+    const fs::path log = scratch / "glslc-probe.log";
+    std::ostringstream command;
+    command << '"' << glslc << '"'
+            << " -o - -fshader-stage=compute --target-env=vulkan1.3 "
+            << '"' << shader.string() << '"'
+            << " > \"" << log.string() << "\" 2>&1";
+    const int status = std::system(command.str().c_str());
+    std::string output;
+    try {
+        output = read_all(log);
+    } catch (const std::exception &) {
+        output.clear();
+    }
+    if (status == 0) return true;
+
+    // A refusal naming the extension is the expected negative and says nothing
+    // more. Anything else is a probe that did not run, and silence about it is
+    // how a shader set quietly loses half its variants.
+    if (output.find(std::string("extension not supported: ") + std::string(extension))
+        == std::string::npos) {
+        mcpp::warning((std::string("backend-vulkan: the ")
+                       + std::string(extension)
+                       + " probe failed without saying the extension is "
+                         "unsupported, so it is treated as unsupported: "
+                       + one_line(output, 200)).c_str());
+    }
+    return false;
+}
+
+// SELF-CONTAINED IS THE REQUIREMENT; `-static` IS ONLY ONE WAY TO GET THERE,
+// AND IT IS NOT PORTABLE BETWEEN THE TWO COMPILERS. All measured on this
+// ecosystem's own payloads:
+//
+//   g++     -static                      links, runs.
+//   clang++ -static                      does not link: dozens of
+//                                        `undefined symbol:
+//                                        std::exception::~exception()` out of
+//                                        libc++.a, whose ABI half is a
+//                                        separate archive.
+//   clang++ -static -lc++abi             links, and SEGFAULTS before main --
+//                                        the same static-libc++ initialisation
+//                                        hazard this ecosystem has met before.
+//   clang++ -static-libstdc++ -lc++abi   links, runs, and every dynamic
+//                                        dependency including the interpreter
+//                                        resolves inside the mcpp registry.
+//
+// The last row is what the invariant actually asks for: no HOST dependency.
+// A dynamically linked tool whose whole closure is payloads is exactly as
+// self-contained as a static one, and unlike the static clang build it works.
+//
+// The flavour is decided by the program's NAME, the same way
+// `mcpp.rules.spirv` classifies glslang and glslc: asking the binary costs a
+// process and answers no question its name does not already answer.
+struct host_compiler {
+    std::string path;
+    bool        is_clang = false;
+    explicit operator bool() const { return !path.empty(); }
+};
+
+host_compiler find_host_compiler() {
+    const std::string toolchain = mcpp::toolchain_dir();
+    if (toolchain.empty()) return {};
+    for (const char * name : {"g++", "clang++", "c++"}) {
+        const fs::path candidate = fs::path(toolchain) / "bin" / name;
+        if (!fs::exists(candidate)) continue;
+        // `c++` is whichever of the two the payload made it; ask the payload
+        // rather than assuming, because guessing wrong produces a link error
+        // in an action rather than a message here.
+        bool clang = std::string_view(name) == "clang++";
+        if (std::string_view(name) == "c++") {
+            clang = fs::exists(fs::path(toolchain) / "bin" / "clang");
+        }
+        return {candidate.string(), clang};
+    }
+    return {};
+}
+
+int emit_vulkan() {
+    // LINUX ONLY, AND REFUSED RATHER THAN ATTEMPTED ELSEWHERE.
+    //
+    // macOS already has `backend-metal`, and a Vulkan build there needs
+    // MoltenVK, which no package in this ecosystem delivers; Windows uses the
+    // system loader rather than the one `compat:vulkan` builds, and the
+    // capability probe below shells out with a redirection that has a
+    // different grammar there. None of that is verified, and a build program
+    // that tried anyway would fail somewhere further in, with a message about
+    // whatever broke first rather than about the platform.
+    if (std::string(mcpp::target_os()) != "linux") {
+        std::cerr << "ggml-org:llamacpp backend-vulkan is Linux only; this "
+                     "build targets " << mcpp::target_os()
+                  << ". On macOS use backend-metal.\n";
+        return 2;
+    }
+
+    // The generator runs during the build, so it has to be a program this
+    // machine can execute. Under cross-compilation the resolved toolchain
+    // produces binaries for somewhere else, and a tool that cannot run is a
+    // failure worth naming here rather than a confusing "Exec format error"
+    // from the middle of the graph.
+    if (std::string(mcpp::host()) != std::string(mcpp::target())) {
+        std::cerr << "ggml-org:llamacpp backend-vulkan does not cross-compile: "
+                  << "the shader generator is built from the vendored source and "
+                  << "run during the build, and this build targets "
+                  << mcpp::target() << " from " << mcpp::host() << "\n";
+        return 2;
+    }
+
+    const std::string shaderc = mcpp::xpkg_dir("xim", "shaderc");
+    if (shaderc.empty()) {
+        std::cerr << "ggml-org:llamacpp backend-vulkan needs glslc. Declare it:\n"
+                  << "    [feature-xlings.backend-vulkan]\n"
+                  << "    \"xim:shaderc\" = \"2026.3\"\n";
+        return 2;
+    }
+    const fs::path glslc = fs::path(shaderc) / "bin/glslc";
+    if (!fs::exists(glslc)) {
+        std::cerr << "ggml-org:llamacpp backend-vulkan: xim:shaderc is installed at "
+                  << shaderc << " but carries no bin/glslc\n";
+        return 2;
+    }
+
+    const host_compiler compiler = find_host_compiler();
+    if (!compiler) {
+        std::cerr << "ggml-org:llamacpp backend-vulkan: no C++ compiler found under "
+                  << mcpp::toolchain_dir() << "/bin (looked for g++, clang++, c++)\n";
+        return 2;
+    }
+
+    const fs::path manifest = mcpp::manifest_dir();
+    const fs::path backend = manifest / "third_party/llama.cpp/ggml/src/ggml-vulkan";
+    const fs::path shaders = backend / "vulkan-shaders";
+    const fs::path generator_source = shaders / "vulkan-shaders-gen.cpp";
+    if (!fs::exists(generator_source)) {
+        throw std::runtime_error(
+            "vendored vulkan-shaders-gen.cpp not found at " + generator_source.string()
+        );
+    }
+
+    const fs::path out = fs::path(mcpp::out_dir()) / "vulkan";
+    fs::create_directories(out);
+
+    // The set of shaders and the set of shared .glsl fragments both change
+    // between upstream imports, and neither is a declared input of anything
+    // until this program declares it.
+    mcpp::rerun_if_changed_glob(
+        "third_party/llama.cpp/ggml/src/ggml-vulkan/vulkan-shaders/*.comp"
+    );
+    mcpp::rerun_if_changed_glob(
+        "third_party/llama.cpp/ggml/src/ggml-vulkan/vulkan-shaders/*.glsl"
+    );
+    mcpp::rerun_if_changed(generator_source.string().c_str());
+
+    // ONE probe, two readers. Each supported extension is a define on the
+    // generator's own compile (it decides which variants to emit) and on
+    // ggml-vulkan.cpp (it decides which variants to look for). Probing twice
+    // would make one truth into two, and the second copy is the one that
+    // drifts.
+    struct extension_probe {
+        const char * extension;
+        const char * shader;
+        const char * define;
+    };
+    static constexpr extension_probe kProbes[] = {
+        {"GL_KHR_cooperative_matrix", "coopmat.comp",
+         "GGML_VULKAN_COOPMAT_GLSLC_SUPPORT"},
+        {"GL_NV_cooperative_matrix2", "coopmat2.comp",
+         "GGML_VULKAN_COOPMAT2_GLSLC_SUPPORT"},
+        {"GL_NV_cooperative_matrix_decode_vector", "coopmat2_decode_vector.comp",
+         "GGML_VULKAN_COOPMAT2_DECODE_VECTOR_GLSLC_SUPPORT"},
+        {"GL_EXT_integer_dot_product", "integer_dot.comp",
+         "GGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT"},
+        {"GL_EXT_bfloat16", "bfloat16.comp",
+         "GGML_VULKAN_BFLOAT16_GLSLC_SUPPORT"},
+        {"GL_EXT_float_e2m1", "float_e2m1.comp",
+         "GGML_VULKAN_FLOAT_E2M1_GLSLC_SUPPORT"},
+        {"GL_EXT_float_e4m3", "float_e4m3.comp",
+         "GGML_VULKAN_FLOAT_E4M3_GLSLC_SUPPORT"},
+    };
+
+    std::vector<std::string> defines;
+    for (const extension_probe & probe : kProbes) {
+        const fs::path shader = shaders / "feature-tests" / probe.shader;
+        if (glslc_supports(glslc.string(), shader, probe.extension, out)) {
+            defines.emplace_back(probe.define);
+            mcpp::define(probe.define);
+        }
+    }
+
+    // The generator, built from the source vendored beside the backend it
+    // feeds. Taking it from a payload would be a second version of a contract
+    // upstream keeps in one repository.
+    //
+    // Self-contained on purpose: it runs from inside the build, under whatever
+    // loader the project resolved, and a tool that needs the HOST's C++
+    // runtime is a host dependency this ecosystem does not accept. How that is
+    // spelled depends on the compiler -- see `host_compiler` above.
+    const fs::path generator = out / "vulkan-shaders-gen";
+    // THE SECOND COMPILER MUST BE TOLD WHERE IT IS.
+    //
+    // It starts knowing nothing about the environment mcpp placed it in: the C
+    // library is not at /usr/include and the assembler is not at /usr/bin.
+    // `mcpp::toolchain_sysroot()` and `mcpp::toolchain_binutils_dir()` are the
+    // `--sysroot` and `-B` mcpp passes to its OWN compiler for this target, and
+    // forwarding them is what makes the two see the same thing. docs/07
+    // "Driving a second compiler" states this, and the failure it names is
+    // exactly the one this omission produced:
+    //
+    //   fatal error: features.h: No such file or directory
+    //
+    // WHY IT WAS GREEN LOCALLY, WHICH IS THE WORSE HALF. Without the sysroot,
+    // gcc's last resort is whatever `/usr/include`-shaped directory it was
+    // configured with, and on the machine this was written on that resolved to
+    // a SubOS belonging to an unrelated checkout. So the build succeeded here
+    // by reading a header from outside the ecosystem -- the dependency this
+    // ecosystem exists to remove -- and only a clean runner, which has no such
+    // directory, reported it.
+    const std::string sysroot = mcpp::toolchain_sysroot();
+    const std::string binutils = mcpp::toolchain_binutils_dir();
+
+    std::vector<std::string> build_command = {
+        compiler.path, "-std=c++17", "-O2", "-pthread",
+        compiler.is_clang ? "-static-libstdc++" : "-static",
+    };
+    if (!sysroot.empty())  build_command.push_back("--sysroot=" + sysroot);
+    if (!binutils.empty()) build_command.push_back("-B" + binutils);
+    for (const std::string & define : defines) build_command.push_back("-D" + define);
+    build_command.push_back(generator_source.string());
+    // After the translation unit: a static archive only supplies what has
+    // already been asked for.
+    if (compiler.is_clang) build_command.push_back("-lc++abi");
+    build_command.push_back("-o");
+    build_command.push_back(generator.string());
+
+    mcpp::action build_generator;
+    build_generator.id = "vulkan:shaders-gen";
+    build_generator.role = "source";
+    build_generator.description = "compile vulkan-shaders-gen";
+    for (const std::string & argument : build_command) {
+        build_generator.arg(argument.c_str());
+    }
+    build_generator.input(generator_source.string().c_str())
+                   .output(generator.string().c_str())
+                   .submit();
+
+    // The header every generated source includes. The generator writes it only
+    // when invoked with no --source, which is why it is its own edge.
+    const fs::path spv = out / "vulkan-shaders.spv";
+    const fs::path header = out / "ggml-vulkan-shaders.hpp";
+    mcpp::action build_header;
+    build_header.id = "vulkan:shaders-hpp";
+    build_header.role = "source";
+    build_header.description = "generate ggml-vulkan-shaders.hpp";
+    build_header.arg(generator.string().c_str())
+                .arg("--output-dir").arg(spv.string().c_str())
+                .arg("--target-hpp").arg(header.string().c_str())
+                .input(generator.string().c_str())
+                .output(header.string().c_str())
+                .submit();
+
+    // Every shader includes fragments from the same directory, and upstream
+    // tracks that with a depfile. The generator still writes one, next to each
+    // generated source; it is an undeclared side effect that nothing reads,
+    // because mcpp's action grammar has no depfile field. The
+    // over-approximation -- every fragment is an input of every shader -- is
+    // correct and costs a full shader rebuild when a fragment changes, which
+    // in this repository happens once per upstream import.
+    std::vector<std::string> fragments;
+    for (const fs::directory_entry & entry : fs::directory_iterator(shaders)) {
+        if (entry.path().extension() == ".glsl") {
+            fragments.push_back(entry.path().string());
+        }
+    }
+    std::ranges::sort(fragments);
+
+    std::vector<std::string> comps;
+    for (const fs::directory_entry & entry : fs::directory_iterator(shaders)) {
+        if (entry.path().extension() == ".comp") {
+            comps.push_back(entry.path().string());
+        }
+    }
+    std::ranges::sort(comps);
+    if (comps.empty()) {
+        throw std::runtime_error("no .comp shaders found in " + shaders.string());
+    }
+
+    for (const std::string & comp : comps) {
+        const std::string name = fs::path(comp).filename().string();
+        const fs::path target_cpp = out / (name + ".cpp");
+        const std::string id = "vulkan:shader:" + name;
+
+        mcpp::action shader;
+        shader.id = id.c_str();
+        shader.role = "source";
+        shader.description = "generate vulkan shader variants";
+        shader.arg(generator.string().c_str())
+              .arg("--glslc").arg(glslc.string().c_str())
+              .arg("--source").arg(comp.c_str())
+              .arg("--output-dir").arg(spv.string().c_str())
+              .arg("--target-hpp").arg(header.string().c_str())
+              .arg("--target-cpp").arg(target_cpp.string().c_str())
+              .input(generator.string().c_str())
+              .input(comp.c_str());
+        for (const std::string & fragment : fragments) {
+            shader.input(fragment.c_str());
+        }
+        shader.output(target_cpp.string().c_str()).submit();
+    }
+
+    // Private to this package: the generated sources and ggml-vulkan.cpp reach
+    // the header through it, and a consumer has no business seeing it.
+    mcpp::include_dir(out.string().c_str());
+    return 0;
+}
+
+}  // namespace
+
+int main() try {
+    if (int result = validate_features(); result != 0) return result;
+    if (mcpp::has_feature("backend-metal")) {
+        if (int result = emit_metal(); result != 0) return result;
+    }
+    if (mcpp::has_feature("backend-vulkan")) {
+        if (int result = emit_vulkan(); result != 0) return result;
+    }
     return 0;
 } catch (const std::exception & error) {
-    std::fprintf(stderr, "mcpplibs:llamacpp build.mcpp: %s\n", error.what());
+    std::cerr << "ggml-org:llamacpp build.mcpp: " << error.what() << "\n";
     return 1;
 }
