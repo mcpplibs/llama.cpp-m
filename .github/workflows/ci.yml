@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 env:
-  MCPP_VERSION: "2026.9.6.2"
+  MCPP_VERSION: "2026.9.6.3"
   MCPP_RELEASE_BASE: https://github.com/mcpp-community/mcpp/releases/download
 
 jobs:
@@ -340,6 +340,38 @@ jobs:
         run: |
           python3 -m unittest discover -s tests/unit \
             -p 'test_build_contract.py' -v
+
+      # THE REFUSAL IS A FEATURE, SO IT HAS A CRITERION.
+      #
+      # `build.mcpp` refuses a libc++ toolchain by name. Asserting that it does
+      # requires a build that actually resolves libc++, which is what
+      # `--toolchain llvm` gives; the payload is the cost of the assertion, and
+      # the alternative -- trusting that a three-line comparison fires -- is
+      # how a refusal ends up written, green, and never reached.
+      #
+      # It must fail EARLY: the point of the refusal is that the user never
+      # sees the compiler's diagnostics, so the criterion is both the exit code
+      # and the absence of any compile.
+      #
+      # The version is named because `--toolchain` takes `<pkg>@<version>` and
+      # nothing is installed on a fresh runner, so "the newest installed" has
+      # no meaning here. `llvm@22.1.8` is the payload mcpp's own e2e workflow
+      # resolves; if the index stops carrying it this step fails at resolution,
+      # with a message that says so.
+      - name: A libc++ toolchain is refused by name, before anything compiles
+        shell: bash
+        run: |
+          set -uo pipefail
+          out=$(mcpp build --features backend-vulkan --toolchain llvm@22.1.8 2>&1)
+          status=$?
+          echo "${out}"
+          test "${status}" -eq 1 -o "${status}" -eq 2 \
+            || { echo "expected a refusal, mcpp exited ${status}"; exit 1; }
+          grep -F "needs a libstdc++ toolchain" <<<"${out}"
+          grep -F "backend-vulkan feature" <<<"${out}"
+          # If it had reached the compiler, ggml-vulkan.cpp would appear.
+          grep -qF "ggml-vulkan.cpp" <<<"${out}" \
+            && { echo "the build reached the compiler; the refusal came too late"; exit 1; }
 
   release-contract:
     runs-on: ubuntu-24.04
