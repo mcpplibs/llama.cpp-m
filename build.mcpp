@@ -142,31 +142,59 @@ int emit_metal() {
 
 // --------------------------------------------------------------- Vulkan ----
 
-// One glslc extension probe. Upstream's CMake reads glslc's own refusal --
-// "extension not supported: <name>" -- rather than a version number, because
-// which extensions a glslc accepts is a property of how it was built.
+// One glslc extension probe. Which extensions a glslc accepts is a property of
+// how it was BUILT, not of its version, so the question is asked by compiling a
+// shader that uses the extension and reading what comes back.
+//
+// COMPILING IS THE ANSWER; THE REFUSAL MESSAGE ONLY EXPLAINS IT. Upstream's
+// CMake decides on the message alone -- absent means supported -- which reports
+// SUPPORTED for a probe that failed for any other reason: a renamed test
+// shader, a glslc that cannot start, a full disk. Claiming a capability that
+// was never verified is the direction that produces a broken build far away
+// from here, so a probe that did not answer the question is treated as "not
+// supported" and says so.
+//
+// Measured on shaderc 2026.3: all seven probes exit 0, so this is the same
+// answer upstream's rule gives on a working toolchain.
 bool glslc_supports(
     const std::string & glslc,
     const fs::path & shader,
     std::string_view extension,
     const fs::path & scratch
 ) {
-    if (!fs::exists(shader)) return false;
+    if (!fs::exists(shader)) {
+        mcpp::warning((std::string("backend-vulkan: no feature test for ")
+                       + std::string(extension) + " at " + shader.string()
+                       + "; treating the extension as unsupported").c_str());
+        return false;
+    }
     const fs::path log = scratch / "glslc-probe.log";
     std::ostringstream command;
     command << '"' << glslc << '"'
             << " -o - -fshader-stage=compute --target-env=vulkan1.3 "
             << '"' << shader.string() << '"'
             << " > \"" << log.string() << "\" 2>&1";
-    std::system(command.str().c_str());
+    const int status = std::system(command.str().c_str());
     std::string output;
     try {
         output = read_all(log);
     } catch (const std::exception &) {
-        return false;
+        output.clear();
     }
-    return output.find(std::string("extension not supported: ") + std::string(extension))
-        == std::string::npos;
+    if (status == 0) return true;
+
+    // A refusal naming the extension is the expected negative and says nothing
+    // more. Anything else is a probe that did not run, and silence about it is
+    // how a shader set quietly loses half its variants.
+    if (output.find(std::string("extension not supported: ") + std::string(extension))
+        == std::string::npos) {
+        mcpp::warning((std::string("backend-vulkan: the ")
+                       + std::string(extension)
+                       + " probe failed without saying the extension is "
+                         "unsupported, so it is treated as unsupported: "
+                       + output.substr(0, 200)).c_str());
+    }
+    return false;
 }
 
 std::string find_host_compiler() {
