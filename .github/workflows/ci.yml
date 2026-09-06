@@ -247,6 +247,11 @@ jobs:
           grep -E "offloaded [1-9][0-9]*/[1-9][0-9]* layers to GPU" metal.log
 
   vulkan:
+    # Cost, measured rather than guessed: a cold `--features backend-vulkan`
+    # build is 763s of user CPU (49s wall on 32 threads). A 4-core runner needs
+    # roughly four minutes for that plus the CPU half of llama.cpp, so the
+    # 90-minute budget below is generous rather than tight.
+    #
     # NO GPU, AND THAT IS THE POINT. The device is Mesa's lavapipe, delivered
     # as a payload by `[feature-xlings.backend-vulkan]`, so this job measures
     # the backend rather than the runner's hardware. A machine with a discrete
