@@ -295,6 +295,15 @@ backend-cpu = {}
 # `backend-metal`, and a Vulkan build there needs MoltenVK, which no package in
 # this ecosystem delivers; Windows needs the system loader rather than the one
 # `compat:vulkan` builds. `build.mcpp` refuses both with the reason.
+#
+# AND A libstdc++ TOOLCHAIN, on this checkpoint. Upstream's ggml-vulkan.cpp
+# destroys a `std::unique_ptr<vk_memory_logger>` where that class is only
+# forward-declared; libc++ has a static assertion for it and libstdc++ does
+# not. That is upstream's source, not this packaging, and no build program can
+# repair it without patching the vendored tree. Not refused here, because the
+# distinction a refusal would need -- which C++ standard library the project
+# resolved -- is not something mcpp hands a build program; guessing it from the
+# compiler's name would refuse clang with libstdc++, which works.
 [features.backend-vulkan]
 sources = ["third_party/llama.cpp/ggml/src/ggml-vulkan/ggml-vulkan.cpp"]
 defines = ["LLAMACPP_VULKAN_TEST=1"]

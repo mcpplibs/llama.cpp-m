@@ -210,12 +210,50 @@ bool glslc_supports(
     return false;
 }
 
-std::string find_host_compiler() {
+// SELF-CONTAINED IS THE REQUIREMENT; `-static` IS ONLY ONE WAY TO GET THERE,
+// AND IT IS NOT PORTABLE BETWEEN THE TWO COMPILERS. All measured on this
+// ecosystem's own payloads:
+//
+//   g++     -static                      links, runs.
+//   clang++ -static                      does not link: dozens of
+//                                        `undefined symbol:
+//                                        std::exception::~exception()` out of
+//                                        libc++.a, whose ABI half is a
+//                                        separate archive.
+//   clang++ -static -lc++abi             links, and SEGFAULTS before main --
+//                                        the same static-libc++ initialisation
+//                                        hazard this ecosystem has met before.
+//   clang++ -static-libstdc++ -lc++abi   links, runs, and every dynamic
+//                                        dependency including the interpreter
+//                                        resolves inside the mcpp registry.
+//
+// The last row is what the invariant actually asks for: no HOST dependency.
+// A dynamically linked tool whose whole closure is payloads is exactly as
+// self-contained as a static one, and unlike the static clang build it works.
+//
+// The flavour is decided by the program's NAME, the same way
+// `mcpp.rules.spirv` classifies glslang and glslc: asking the binary costs a
+// process and answers no question its name does not already answer.
+struct host_compiler {
+    std::string path;
+    bool        is_clang = false;
+    explicit operator bool() const { return !path.empty(); }
+};
+
+host_compiler find_host_compiler() {
     const std::string toolchain = mcpp::toolchain_dir();
     if (toolchain.empty()) return {};
     for (const char * name : {"g++", "clang++", "c++"}) {
         const fs::path candidate = fs::path(toolchain) / "bin" / name;
-        if (fs::exists(candidate)) return candidate.string();
+        if (!fs::exists(candidate)) continue;
+        // `c++` is whichever of the two the payload made it; ask the payload
+        // rather than assuming, because guessing wrong produces a link error
+        // in an action rather than a message here.
+        bool clang = std::string_view(name) == "clang++";
+        if (std::string_view(name) == "c++") {
+            clang = fs::exists(fs::path(toolchain) / "bin" / "clang");
+        }
+        return {candidate.string(), clang};
     }
     return {};
 }
@@ -264,8 +302,8 @@ int emit_vulkan() {
         return 2;
     }
 
-    const std::string compiler = find_host_compiler();
-    if (compiler.empty()) {
+    const host_compiler compiler = find_host_compiler();
+    if (!compiler) {
         std::cerr << "ggml-org:llamacpp backend-vulkan: no C++ compiler found under "
                   << mcpp::toolchain_dir() << "/bin (looked for g++, clang++, c++)\n";
         return 2;
@@ -335,15 +373,20 @@ int emit_vulkan() {
     // feeds. Taking it from a payload would be a second version of a contract
     // upstream keeps in one repository.
     //
-    // Statically linked on purpose: it runs from inside the build, under
-    // whatever loader the project resolved, and a tool that needs the host's
-    // libstdc++ is a host dependency this ecosystem does not accept.
+    // Self-contained on purpose: it runs from inside the build, under whatever
+    // loader the project resolved, and a tool that needs the HOST's C++
+    // runtime is a host dependency this ecosystem does not accept. How that is
+    // spelled depends on the compiler -- see `host_compiler` above.
     const fs::path generator = out / "vulkan-shaders-gen";
     std::vector<std::string> build_command = {
-        compiler, "-std=c++17", "-O2", "-pthread", "-static",
+        compiler.path, "-std=c++17", "-O2", "-pthread",
+        compiler.is_clang ? "-static-libstdc++" : "-static",
     };
     for (const std::string & define : defines) build_command.push_back("-D" + define);
     build_command.push_back(generator_source.string());
+    // After the translation unit: a static archive only supplies what has
+    // already been asked for.
+    if (compiler.is_clang) build_command.push_back("-lc++abi");
     build_command.push_back("-o");
     build_command.push_back(generator.string());
 

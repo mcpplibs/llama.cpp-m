@@ -146,6 +146,26 @@ extensions it accepts. That answer has two readers -- the generator, which
 decides which variants to emit, and `ggml-vulkan.cpp`, which decides which to
 look for -- and asking twice would make one truth into two.
 
+### A libstdc++ toolchain, on this checkpoint
+
+`backend-vulkan` builds with a libstdc++ toolchain. Under libc++ the compile of
+upstream's `ggml-vulkan.cpp` stops at
+
+```
+error: invalid application of 'sizeof' to an incomplete type 'vk_memory_logger'
+  in instantiation of member function 'std::unique_ptr<vk_memory_logger>::~unique_ptr'
+```
+
+`vk_device_struct` holds a `std::unique_ptr<vk_memory_logger>` and its
+destructor is instantiated at line 1015, while the class is defined at line
+1920. Destroying a `unique_ptr` to an incomplete type is undefined behaviour;
+libc++ has a static assertion for it and libstdc++ does not. It is upstream's
+source rather than this packaging, and nothing in a build program can repair
+it without patching the vendored tree, which this repository does not do.
+
+Everything else is unaffected: the CPU backend builds under both standard
+libraries, measured.
+
 ### Running without a GPU
 
 ggml keeps only Vulkan devices whose type is not `eCpu`, so a software
