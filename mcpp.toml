@@ -338,7 +338,7 @@ flags = [
 [feature-deps.backend-vulkan]
 compat.vulkan = "1.4.357.0"
 compat.spirv-headers = "1.4.357.0"
-compat.vulkan-runtime = "2026.09.07"
+compat.vulkan-runtime = "2026.09.11"
 
 # shaderc carries glslc, which upstream's generator drives by name and whose
 # flags are not glslang's. mesa-lavapipe is a Vulkan device that needs no GPU;
