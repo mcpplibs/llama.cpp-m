@@ -12,6 +12,7 @@ permissions:
 env:
   MCPP_VERSION: "2026.10.21.1"
   MCPP_RELEASE_BASE: https://github.com/mcpp-community/mcpp/releases/download
+  VULKAN_INDEX_COMMIT: "a4130c75a49c6e9df03690743467696ef81d3a19"
 
 jobs:
   unit-and-import:
@@ -275,6 +276,20 @@ jobs:
       MCPP_HOME: /tmp/llamacpp-vulkan-mcpp-home
     steps:
       - uses: actions/checkout@v4
+      - name: Checkout the candidate runtime adapter metadata
+        uses: actions/checkout@v4
+        with:
+          repository: mcpplibs/mcpp-index
+          ref: ${{ env.VULKAN_INDEX_COMMIT }}
+          path: .candidate-index
+      - name: Route Vulkan dependencies through the candidate index
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+          with Path("mcpp.toml").open("a", encoding="utf-8") as manifest:
+              manifest.write('\n[indices]\ncompat = { path = ' + json.dumps(Path(".candidate-index").resolve().as_posix()) + ' }\n')
+          PY
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"

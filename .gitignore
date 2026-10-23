@@ -1,5 +1,6 @@
 .mcpp/
 .xlings/
+.candidate-index/
 target/
 generated/*
 !generated/ggml_cpp.cpp
