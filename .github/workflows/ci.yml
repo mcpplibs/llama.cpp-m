@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 env:
-  MCPP_VERSION: "2026.10.21.1"
+  MCPP_VERSION: "2026.10.24.1"
   MCPP_RELEASE_BASE: https://github.com/mcpp-community/mcpp/releases/download
   VULKAN_INDEX_COMMIT: "a4130c75a49c6e9df03690743467696ef81d3a19"
 
