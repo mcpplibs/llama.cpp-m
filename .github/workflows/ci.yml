@@ -198,16 +198,11 @@ jobs:
               test_bin=$(find target -type f -path "*/bin/cpu_decode" -print -quit)
               test -x "${helper}"
               test -n "${test_bin}"
-              for binary in "${helper}" "${test_bin}"; do
-                file "${binary}" | tee /tmp/file.log
-                grep -F "ARM aarch64" /tmp/file.log
-                grep -F "statically linked" /tmp/file.log
-                if readelf -l "${binary}" | grep -q INTERP; then
-                  echo "PT_INTERP present in ${binary}"
-                  exit 1
-                fi
-                echo "PT_INTERP absent in ${binary}"
-              done
+              # Current mcpp may bind a dynamic managed glibc runtime.
+              # Validate PT_INTERP and every loaded path, rather than assuming
+              # the host helper and target must both have a static file label.
+              python3 tools/check_native_runtime.py --home "${MCPP_HOME}" \
+                --arch "ARM aarch64" "${helper}" "${test_bin}"
 
               test -f compile_commands.json
               grep -F "/arch/arm/quants.c" compile_commands.json
