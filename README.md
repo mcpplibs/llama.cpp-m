@@ -8,7 +8,7 @@ import llamacpp;
 ```
 
 The package version IS llama.cpp's build number, plus this packaging's own
-revision of it: `b10069.2`. CPU is the default backend; Metal is an additive
+revision of it: `b10069.3`. CPU is the default backend; Metal is an additive
 feature for macOS ARM64 and Vulkan an additive feature for Linux. Consumers pin
 exactly -- `b10069` is not semver, so no range expresses "b10069 or later" --
 which means a consumer wanting a feature names the revision that has it.
@@ -16,31 +16,31 @@ which means a consumer wanting a feature names the revision that has it.
 
 ## Add The Package
 
-After `b10069.2` is published in mcpp-index:
+After `b10069.3` is published in mcpp-index:
 
 ```bash
-mcpp add ggml-org:llamacpp@b10069.2
+mcpp add ggml-org:llamacpp@b10069.3
 ```
 
 The equivalent manifest entry is:
 
 ```toml
 [dependencies.ggml-org]
-llamacpp = "b10069.2"
+llamacpp = "b10069.3"
 ```
 
 For Metal on macOS ARM64:
 
 ```toml
 [dependencies.ggml-org]
-llamacpp = { version = "b10069.2", features = ["backend-metal"] }
+llamacpp = { version = "b10069.3", features = ["backend-metal"] }
 ```
 
 For Vulkan on Linux:
 
 ```toml
 [dependencies.ggml-org]
-llamacpp = { version = "b10069.2", features = ["backend-vulkan"] }
+llamacpp = { version = "b10069.3", features = ["backend-vulkan"] }
 ```
 
 That line is the whole diff. The shader compiler, the Khronos loader, the
@@ -217,7 +217,7 @@ before the tokens are compared.
 
 ## Supported Boundary
 
-`b10069.2` includes:
+`b10069.3` includes:
 
 - the public llama.cpp C API exposed through `import llamacpp;`;
 - the CPU backend on Linux x86_64, Linux ARM64, Windows x86_64, and macOS ARM64;
@@ -235,3 +235,19 @@ calls them may receive the deprecation warnings defined by upstream.
 See [the update policy](docs/upstream-update-policy.md) for versioning and
 checkpoint selection, and [the b10069 validation record](docs/validation/b10069.md)
 for exact evidence and remaining release gates.
+
+## Quickstart project template
+
+The b10069.3 package adds a runnable default template. After that version is indexed:
+
+```sh
+mcpp new my-llama --template ggml-org.llamacpp@b10069.3
+cd my-llama
+mcpp run
+```
+
+The default run initializes the CPU backend and prints its capabilities without
+downloading a model. `mcpp run -- /path/to/model.gguf` loads that local model,
+decodes a small batch and samples a token. This smoke example is a starting
+point; the existing chat-cpu example demonstrates prompt tokenization and chat.
+`python3 tools/test_template.py` exercises the real renderer and generated project.

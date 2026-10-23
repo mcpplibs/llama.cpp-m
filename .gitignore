@@ -1,6 +1,11 @@
 .mcpp/
+.xlings/
 target/
-generated/
+generated/*
+!generated/ggml_cpp.cpp
+!generated/ggml-cpu_cpp.cpp
+!generated/ggml_metal_device_m.m
+!generated/ggml_build_info.h
 compile_commands.json
 __pycache__/
 *.pyc

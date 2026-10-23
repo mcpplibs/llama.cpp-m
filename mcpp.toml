@@ -21,7 +21,7 @@
 [package]
 namespace = "ggml-org"
 name = "llamacpp"
-version = "b10069.2"
+version = "b10069.3"
 description = "C++23 module package for llama.cpp b10069"
 license = "MIT"
 standard = "c++23"
@@ -233,6 +233,8 @@ sources = [
 cflags = ["-w", "-include", "ggml_build_info.h", "-DGGML_USE_CPU_REPACK"]
 cxxflags = ["-w", "-include", "ggml_build_info.h", "-DGGML_USE_CPU_REPACK"]
 flags = [
+  { glob = "third_party/llama.cpp/src/**", cxxflags = ["-include", "cstdlib"] },
+  { glob = "third_party/llama.cpp/ggml/src/gguf.cpp", cxxflags = ["-include", "cerrno"] },
   { glob = "third_party/llama.cpp/ggml/src/ggml-backend-reg.cpp", defines = ["GGML_USE_CPU"] },
   { glob = "third_party/llama.cpp/ggml/src/ggml-cpu/**", defines = ["GGML_USE_LLAMAFILE"] },
   { glob = "generated/ggml-cpu_cpp.cpp", defines = ["GGML_USE_LLAMAFILE"] },

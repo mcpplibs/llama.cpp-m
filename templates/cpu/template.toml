@@ -1,0 +1,4 @@
+[template]
+description = "Initialize llama.cpp on the CPU and optionally decode a local GGUF model"
+default = true
+post_message = "Run `mcpp run` for CPU initialization, or `mcpp run -- /path/to/model.gguf` for a decode and sample."

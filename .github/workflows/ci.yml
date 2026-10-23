@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 env:
-  MCPP_VERSION: "2026.9.6.3"
+  MCPP_VERSION: "2026.10.21.1"
   MCPP_RELEASE_BASE: https://github.com/mcpp-community/mcpp/releases/download
 
 jobs:
@@ -45,12 +45,15 @@ jobs:
       - name: Cold CPU package build
         run: |
           rm -rf target
+          python3 tools/generate_build_files.py --check
           mcpp --version | grep -F "${MCPP_VERSION}"
           mcpp build --strict --no-cache
       - name: Unit and repository checks
         env:
           LLAMACPP_REQUIRE_BUILD_HELPER: "1"
         run: python3 -m unittest discover -s tests/unit -p 'test_*.py' -v
+      - name: Actual default project template
+        run: python3 tools/test_template.py --toolchain llvm@23.1.3
       - name: Verify vendored upstream and generated API
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -145,6 +148,10 @@ jobs:
           if (-not (Select-String -Quiet -SimpleMatch "LLAMACPP_CPU_TEST=PASS" cpu.log)) {
             throw "CPU pass marker missing"
           }
+
+      - name: Actual template GGUF decode
+        shell: bash
+        run: python3 tools/test_template.py --run-arg "$RUNNER_TEMP/stories15M.gguf"
 
   linux-arm64:
     runs-on: ubuntu-24.04-arm

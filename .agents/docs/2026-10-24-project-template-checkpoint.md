@@ -1,0 +1,11 @@
+# Runnable project template checkpoint
+
+The existing ggml-org.llamacpp identity is retained. Package b10069.3 follows the existing upstream b10069 plus one packaging revision; no existing release or index hash is rewritten.
+
+The default cpu template uses the fully qualified self.name and self.version dependency. It initializes the actual CPU backend with no model download. With a local GGUF path it loads the model, creates a context, decodes and samples. Resource cleanup is explicit and scoped.
+
+The template test uses the actual mcpp package renderer and verifies the emitted dependency before substituting the staged candidate source. It then compiles and runs the generated program. Both the no-argument flow and a pinned 19 MB GGUF inference flow passed locally on LLVM 23.1.3 (sampled token 471).
+
+A fresh path consumer revealed missing generated build inputs that earlier install-time materialization had hidden. The four stable generated inputs are now checked in verbatim from generated_files, with tools/generate_build_files.py --check guarding drift. Feature-specific Metal/Vulkan generation still uses the build output. Current libc++ also exposed missing standard includes in upstream source; two scoped wrapper compile-flag rules provide cstdlib/cerrno without patching upstream.
+
+mcpp is pinned to 2026.10.21.1. The root package built under LLVM 23.1.3 and all 116 existing unit/repository/build-helper checks passed with LLAMACPP_REQUIRE_BUILD_HELPER=1. Native CPU CI now additionally executes the real template with the existing checksummed model. No merge or release is performed by this checkpoint.
