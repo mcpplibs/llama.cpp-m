@@ -93,7 +93,7 @@ int validate_features() {
             if (!supported.empty()) supported += ", ";
             supported += name;
         }
-        std::cerr << "ggml-org:llamacpp: unsupported feature '" << feature
+        std::cerr << "mcpplibs.mwrap.llamacpp: unsupported feature '" << feature
                   << "' (supported features: " << supported << ")\n";
         return 2;
     }
@@ -108,15 +108,15 @@ int emit_metal() {
     const std::string manifest = mcpp::manifest_dir();
     const std::string out_env = mcpp::out_dir();
     if (std::string(os) != "macos") {
-        std::cerr << "ggml-org:llamacpp backend-metal requires target_os=macos\n";
+        std::cerr << "mcpplibs.mwrap.llamacpp backend-metal requires target_os=macos\n";
         return 2;
     }
     if (std::string(arch) != "aarch64") {
-        std::cerr << "ggml-org:llamacpp backend-metal requires target_arch=aarch64\n";
+        std::cerr << "mcpplibs.mwrap.llamacpp backend-metal requires target_arch=aarch64\n";
         return 2;
     }
     if (manifest.empty() || out_env.empty()) {
-        std::cerr << "ggml-org:llamacpp requires MCPP_MANIFEST_DIR and MCPP_OUT_DIR\n";
+        std::cerr << "mcpplibs.mwrap.llamacpp requires MCPP_MANIFEST_DIR and MCPP_OUT_DIR\n";
         return 2;
     }
 
@@ -269,7 +269,7 @@ int emit_vulkan() {
     // that tried anyway would fail somewhere further in, with a message about
     // whatever broke first rather than about the platform.
     if (std::string(mcpp::target_os()) != "linux") {
-        std::cerr << "ggml-org:llamacpp backend-vulkan is Linux only; this "
+        std::cerr << "mcpplibs.mwrap.llamacpp backend-vulkan is Linux only; this "
                      "build targets " << mcpp::target_os()
                   << ". On macOS use backend-metal.\n";
         return 2;
@@ -291,7 +291,7 @@ int emit_vulkan() {
     // libstdc++, which builds this backend correctly. `mcpp::cxx_stdlib()`
     // answers the question that is actually being asked.
     if (std::string(mcpp::cxx_stdlib()) == "libc++") {
-        std::cerr << "ggml-org:llamacpp backend-vulkan needs a libstdc++ "
+        std::cerr << "mcpplibs.mwrap.llamacpp backend-vulkan needs a libstdc++ "
                      "toolchain; this build resolved libc++.\n"
                      "  Upstream's ggml-vulkan.cpp destroys a std::unique_ptr to "
                      "an incomplete type, which libc++ rejects by static "
@@ -308,7 +308,7 @@ int emit_vulkan() {
     // failure worth naming here rather than a confusing "Exec format error"
     // from the middle of the graph.
     if (std::string(mcpp::host()) != std::string(mcpp::target())) {
-        std::cerr << "ggml-org:llamacpp backend-vulkan does not cross-compile: "
+        std::cerr << "mcpplibs.mwrap.llamacpp backend-vulkan does not cross-compile: "
                   << "the shader generator is built from the vendored source and "
                   << "run during the build, and this build targets "
                   << mcpp::target() << " from " << mcpp::host() << "\n";
@@ -317,21 +317,21 @@ int emit_vulkan() {
 
     const std::string shaderc = mcpp::xpkg_dir("xim", "shaderc");
     if (shaderc.empty()) {
-        std::cerr << "ggml-org:llamacpp backend-vulkan needs glslc. Declare it:\n"
+        std::cerr << "mcpplibs.mwrap.llamacpp backend-vulkan needs glslc. Declare it:\n"
                   << "    [feature-xlings.backend-vulkan]\n"
                   << "    \"xim:shaderc\" = \"2026.3\"\n";
         return 2;
     }
     const fs::path glslc = fs::path(shaderc) / "bin/glslc";
     if (!fs::exists(glslc)) {
-        std::cerr << "ggml-org:llamacpp backend-vulkan: xim:shaderc is installed at "
+        std::cerr << "mcpplibs.mwrap.llamacpp backend-vulkan: xim:shaderc is installed at "
                   << shaderc << " but carries no bin/glslc\n";
         return 2;
     }
 
     const host_compiler compiler = find_host_compiler();
     if (!compiler) {
-        std::cerr << "ggml-org:llamacpp backend-vulkan: no C++ compiler found under "
+        std::cerr << "mcpplibs.mwrap.llamacpp backend-vulkan: no C++ compiler found under "
                   << mcpp::toolchain_dir() << "/bin (looked for g++, clang++, c++)\n";
         return 2;
     }
@@ -534,6 +534,6 @@ int main() try {
     }
     return 0;
 } catch (const std::exception & error) {
-    std::cerr << "ggml-org:llamacpp build.mcpp: " << error.what() << "\n";
+    std::cerr << "mcpplibs.mwrap.llamacpp build.mcpp: " << error.what() << "\n";
     return 1;
 }

@@ -21,7 +21,7 @@ which means a consumer wanting a feature names the revision that has it.
 After `b10069` is published in mcpp-index:
 
 ```bash
-mcpp add ggml-org:llamacpp@b10069
+mcpp add mcpplibs.mwrap.llamacpp@b10069
 ```
 
 The equivalent manifest entry is:
