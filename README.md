@@ -2,9 +2,11 @@
 
 > Pinned llama.cpp b10069 through C++23 modules; upstream API names are preserved.
 
-**English** · [简体中文](README.zh.md)
+**English** · [简体中文](README.zh.md) · Upstream: [ggml-org/llama.cpp](https://github.com/ggml-org/llama.cpp) · [Releases](https://github.com/mcpplibs/llama.cpp-m/releases) · [mcpp](https://github.com/mcpp-community/mcpp) · [Index](https://github.com/mcpplibs/mcpp-index)
 
-Upstream: [ggml-org/llama.cpp](https://github.com/ggml-org/llama.cpp)
+[![C++23](https://img.shields.io/badge/C%2B%2B-23-blue.svg)](https://en.cppreference.com/w/cpp/23)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![CI](https://github.com/mcpplibs/llama.cpp-m/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/mcpplibs/llama.cpp-m/actions/workflows/ci.yml)
 
 ## Add The Package
 
