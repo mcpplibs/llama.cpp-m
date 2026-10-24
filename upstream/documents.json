@@ -1,0 +1,20 @@
+{
+  "upstream": "https://github.com/ggml-org/llama.cpp/tree/b10069",
+  "documents": [
+    {
+      "path": "upstream/llama.cpp/README.md",
+      "source": "https://github.com/ggml-org/llama.cpp/tree/b10069/README.md",
+      "sha256": "b8380da9ee2803cb0aa40e4aab845368ac75a2b97a43018a2f27bfab9edba9b3"
+    },
+    {
+      "path": "upstream/llama.cpp/LICENSE",
+      "source": "https://github.com/ggml-org/llama.cpp/tree/b10069/LICENSE",
+      "sha256": "94f29bbed6a22c35b992c5c6ebf0e7c92f13b836b90f36f461c9cf2f0f1d010d"
+    },
+    {
+      "path": "upstream/wrapper-legacy/LICENSE",
+      "source": "Previous wrapper LICENSE, retained copyright and permission notice",
+      "sha256": "c62ad73b3dfba86da76c382936a5b3fd2dbecf8656647480ad36f18206cf6c15"
+    }
+  ]
+}

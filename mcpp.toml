@@ -4,7 +4,8 @@ namespace = "mcpplibs.mwrap"
 name = "llamacpp"
 version = "b10069"
 description = "C++23 module package for llama.cpp b10069"
-license = "MIT"
+license = "Apache-2.0"
+authors = ["mcpp-community"]
 standard = "c++23"
 
 [build]
@@ -349,3 +350,23 @@ flags = [
 
 [package.metadata.mwrap]
 upstream-version = "b10069"
+
+[[runtime.deploy]]
+from = "LICENSE"
+to = "licenses/llamacpp"
+
+[[runtime.deploy]]
+from = "NOTICE"
+to = "licenses/llamacpp"
+
+[[runtime.deploy]]
+from = "upstream/llama.cpp/README.md"
+to = "licenses/llamacpp/upstream/llama.cpp"
+
+[[runtime.deploy]]
+from = "upstream/llama.cpp/LICENSE"
+to = "licenses/llamacpp/upstream/llama.cpp"
+
+[[runtime.deploy]]
+from = "upstream/wrapper-legacy/LICENSE"
+to = "licenses/llamacpp/upstream/wrapper-legacy"

@@ -5,7 +5,8 @@
 **English** · [简体中文](README.zh.md) · [Upstream](https://github.com/ggml-org/llama.cpp) · [Releases](https://github.com/mcpplibs/llama.cpp-m/releases) · [mcpp](https://github.com/mcpp-community/mcpp) · [Index](https://github.com/mcpplibs/mcpp-index)
 
 [![C++23](https://img.shields.io/badge/C%2B%2B-23-blue.svg)](https://en.cppreference.com/w/cpp/23)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![mcpp-community](https://img.shields.io/badge/mcpp--community-mwrap-blue)](https://github.com/mcpp-community)
 [![CI](https://github.com/mcpplibs/llama.cpp-m/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/mcpplibs/llama.cpp-m/actions/workflows/ci.yml)
 
 ## Modules
@@ -59,4 +60,6 @@ Shader generation, libstdc++ constraints and driver boundaries are in [usage](do
 
 Pin `b10069` exactly; it is not a semver range. `.macros` exposes mapped constants.
 Model quality and unsupported GPU configurations are not implied by the CPU template.
-[Upstream policy](docs/upstream-update-policy.md) · [Validation](docs/validation/b10069.md) · [MIT](LICENSE)
+[Upstream policy](docs/upstream-update-policy.md) · [Validation](docs/validation/b10069.md) · [Apache-2.0](LICENSE)
+
+Wrapper: Apache-2.0, mcpp-community. [Original upstream README and licenses](upstream/llama.cpp/). Upstream licenses remain unchanged.
