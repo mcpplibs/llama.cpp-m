@@ -33,7 +33,7 @@ class RepositoryContractTest(unittest.TestCase):
     def test_package_and_module_identity(self):
         manifest = (ROOT / "mcpp.toml").read_text(encoding="utf-8")
         module = (ROOT / "src/llamacpp.cppm").read_text(encoding="utf-8")
-        self.assertRegex(manifest, r'(?m)^namespace\s*=\s*"ggml-org"$')
+        self.assertRegex(manifest, r'(?m)^namespace\s*=\s*"mcpplibs.mwrap"$')
         self.assertRegex(manifest, r'(?m)^name\s*=\s*"llamacpp"$')
         # The wrapper revision on an unchanged upstream checkpoint. The
         # checkpoint the version NAMES is asserted separately below, so a
@@ -41,7 +41,7 @@ class RepositoryContractTest(unittest.TestCase):
         self.assertRegex(manifest, r'(?m)^version\s*=\s*"b10069(\.[1-9]\d*)?"$')
         lock = (ROOT / "upstream.lock").read_text(encoding="utf-8")
         self.assertIn('"b10069"', lock)
-        self.assertIn("export module llamacpp;", module)
+        self.assertIn("export module mcpplibs.mwrap.llamacpp;", module)
 
     def test_vendored_tree_is_not_locally_patched(self):
         patches = ROOT / "patches"
@@ -117,7 +117,7 @@ class RepositoryContractTest(unittest.TestCase):
             ).read_text(encoding="utf-8")
             self.assertRegex(
                 source,
-                r"llama_token\s+sampled\s*=\s*LLAMA_TOKEN_NULL;"
+                r"llama_token\s+sampled\s*=\s*mcpplibs::mwrap::llamacpp::macros::LLAMA_TOKEN_NULL;"
                 r"[\s\S]*for\s*\([^)]*\)\s*\{"
                 r"[\s\S]*sampled\s*=\s*llama_sampler_sample",
             )
@@ -184,7 +184,7 @@ class RepositoryContractTest(unittest.TestCase):
             # why the scheme change did not ship a release workflow that never
             # fires: it was the FOURTH place `v*` was written down, and the only
             # one that would have failed loudly on its own.
-            'tags: ["b[0-9]*"]',
+            'tags: ["mwrap-*"]',
             "fetch-depth: 0",
             "python3 -m unittest discover",
             "tools/check_release.py",

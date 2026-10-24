@@ -18,8 +18,8 @@ module;
 #undef LLAMA_STATE_SEQ_FLAGS_PARTIAL_ONLY
 #undef LLAMA_STATE_SEQ_FLAGS_ON_DEVICE
 
-export module llamacpp;
+export module mcpplibs.mwrap.llamacpp;
+export import mcpplibs.mwrap.llamacpp.macros;
 
 #include "gen_exports/required_ggml.inc"
 #include "gen_exports/llama.inc"
-#include "gen_exports/typed_constants.inc"

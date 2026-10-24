@@ -92,7 +92,8 @@ def _identity_from_text(manifest_text: str, lock_text: str, tag: str) -> Release
 
     # The tag is the version verbatim, which is also upstream's own tag form
     # (ggml-org/llama.cpp tags releases `b10069`, not `vb10069`).
-    if tag != str(identity.version):
+    prefix = "mwrap-" if manifest["package"].get("namespace") == "mcpplibs.mwrap" else ""
+    if tag != prefix + str(identity.version):
         raise ValueError(
             f"release tag {tag} does not match package version {identity.version}"
         )
@@ -247,14 +248,15 @@ def _tag_identity(root: Path, tag: str) -> ReleaseIdentity | None:
 def _previous_identity(
     root: Path, current: ReleaseIdentity, current_tag: str
 ) -> ReleaseIdentity | None:
-    tags = _git(root, "tag", "--list", "v[0-9]*", "--sort=-version:refname")
+    pattern = "mwrap-b[0-9]*" if current_tag.startswith("mwrap-") else "b[0-9]*"
+    tags = _git(root, "tag", "--list", pattern, "--sort=-version:refname")
     if tags.returncode != 0:
         raise ValueError(f"cannot list release tags: {tags.stderr.strip()}")
     for tag in tags.stdout.splitlines():
         if tag == current_tag:
             continue
         try:
-            version = Version.parse(tag)
+            version = Version.parse(tag.removeprefix("mwrap-"))
         except ValueError:
             continue
         if version > current.version:

@@ -1,7 +1,7 @@
 /// Portable CPU smoke: load a pinned GGUF, decode one batch, and sample.
 import std;
 
-import llamacpp;
+import mcpplibs.mwrap.llamacpp;
 
 #ifdef LLAMA_H
 #error "import llamacpp leaked LLAMA_H"
@@ -13,8 +13,8 @@ import llamacpp;
 
 
 int main() {
-    static_assert(LLAMA_DEFAULT_SEED == 0xFFFFFFFFu);
-    static_assert(LLAMA_TOKEN_NULL == llama_token{-1});
+    static_assert(mcpplibs::mwrap::llamacpp::macros::LLAMA_DEFAULT_SEED == 0xFFFFFFFFu);
+    static_assert(mcpplibs::mwrap::llamacpp::macros::LLAMA_TOKEN_NULL == llama_token{-1});
 
     const char * model_path = std::getenv("LLAMACPP_TEST_MODEL");
     if (!model_path || !*model_path) {

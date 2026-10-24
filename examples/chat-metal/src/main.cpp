@@ -1,5 +1,5 @@
 import std;
-import llamacpp;
+import mcpplibs.mwrap.llamacpp;
 
 namespace {
 
@@ -146,7 +146,7 @@ int main(int argc, char ** argv) {
 
     int generated = 0;
     int exit_code = 0;
-    llama_token sampled = LLAMA_TOKEN_NULL;
+    llama_token sampled = mcpplibs::mwrap::llamacpp::macros::LLAMA_TOKEN_NULL;
     for (; generated < max_generated_tokens; ++generated) {
         const int decode_result = llama_decode(context, batch);
         if (decode_result != 0) {

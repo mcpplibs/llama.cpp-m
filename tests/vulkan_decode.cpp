@@ -19,7 +19,7 @@
 
 import std;
 
-import llamacpp;
+import mcpplibs.mwrap.llamacpp;
 
 #ifdef LLAMA_H
 #error "import llamacpp leaked LLAMA_H"

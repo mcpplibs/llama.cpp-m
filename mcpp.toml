@@ -1,27 +1,8 @@
-# The namespace names whose library this is, not who packaged it; the version
-# says which upstream you are getting. `mcpplibs` is mcpp's DEFAULT namespace
-# (kDefaultNamespace), not an answer to "whose library" — llama.cpp is
-# ggml-org's, and this repository only adds the C++23 module layer.
-#
-# The version is upstream's build number VERBATIM. `0.1.0` needed a lookup
-# table to read, and the README carried it: "Version 0.1.0 maps to llama.cpp
-# b10069". A version that needs a decoder ring is not a version.
-#
-# `b10069` is not semver, and mcpp handles it — verified: resolution, version-key
-# matching and wire addressing all work on a literal non-semver key. What it
-# cannot do is RANGES over it (`^b10069` is not expressible), so consumers pin
-# exactly. See mcpp#363; rule and migration table in mcpp-index#163.
-#
-# The fourth segment is this PACKAGING's revision of that checkpoint, and it
-# moves when the packaging changes without the upstream tree changing:
-# `b10069.1` added `backend-vulkan`, `b10069.2` refuses a libc++ toolchain for
-# it by name. Consumers pin exactly, so a consumer wanting a feature must name
-# the revision that has it -- which is why every version in the README moves
-# with this line rather than staying at the bare checkpoint.
+# Module wrapper; upstream API preserved. Policy: mcpp-index/docs/mwrap.md.
 [package]
-namespace = "ggml-org"
+namespace = "mcpplibs.mwrap"
 name = "llamacpp"
-version = "b10069.2"
+version = "b10069"
 description = "C++23 module package for llama.cpp b10069"
 license = "MIT"
 standard = "c++23"
@@ -63,6 +44,7 @@ sources = [
   "third_party/llama.cpp/ggml/src/ggml-cpu/amx/mmq.cpp",
   "third_party/llama.cpp/ggml/src/ggml-cpu/llamafile/sgemm.cpp",
   "src/llamacpp.cppm",
+  "src/macros.cppm",
   "third_party/llama.cpp/src/llama.cpp",
   "third_party/llama.cpp/src/llama-adapter.cpp",
   "third_party/llama.cpp/src/llama-arch.cpp",
@@ -233,6 +215,8 @@ sources = [
 cflags = ["-w", "-include", "ggml_build_info.h", "-DGGML_USE_CPU_REPACK"]
 cxxflags = ["-w", "-include", "ggml_build_info.h", "-DGGML_USE_CPU_REPACK"]
 flags = [
+  { glob = "third_party/llama.cpp/src/**", cxxflags = ["-include", "cstdlib"] },
+  { glob = "third_party/llama.cpp/ggml/src/gguf.cpp", cxxflags = ["-include", "cerrno"] },
   { glob = "third_party/llama.cpp/ggml/src/ggml-backend-reg.cpp", defines = ["GGML_USE_CPU"] },
   { glob = "third_party/llama.cpp/ggml/src/ggml-cpu/**", defines = ["GGML_USE_LLAMAFILE"] },
   { glob = "generated/ggml-cpu_cpp.cpp", defines = ["GGML_USE_LLAMAFILE"] },
@@ -336,7 +320,7 @@ flags = [
 [feature-deps.backend-vulkan]
 compat.vulkan = "1.4.357.0"
 compat.spirv-headers = "1.4.357.0"
-compat.vulkan-runtime = "2026.09.07"
+compat.vulkan-runtime = "2026.09.11"
 
 # shaderc carries glslc, which upstream's generator drives by name and whose
 # flags are not glslang's. mesa-lavapipe is a Vulkan device that needs no GPU;
@@ -362,3 +346,6 @@ flags = [
   { glob = "third_party/llama.cpp/ggml/src/ggml-metal/ggml-metal.cpp", cxxflags = ["-include", "memory"] },
   { glob = "third_party/llama.cpp/ggml/src/ggml-backend-reg.cpp", defines = ["GGML_USE_METAL"] },
 ]
+
+[package.metadata.mwrap]
+upstream-version = "b10069"

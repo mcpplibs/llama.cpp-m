@@ -10,14 +10,18 @@ permissions:
   contents: read
 
 env:
-  MCPP_VERSION: "2026.9.6.3"
+  MCPP_VERSION: "2026.10.24.1"
   MCPP_RELEASE_BASE: https://github.com/mcpp-community/mcpp/releases/download
+  VULKAN_INDEX_COMMIT: "a4130c75a49c6e9df03690743467696ef81d3a19"
 
 jobs:
   unit-and-import:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+      - name: Mwrap identity and bilingual README contract
+        run: python3 tools/check_mwrap_release.py
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -45,12 +49,15 @@ jobs:
       - name: Cold CPU package build
         run: |
           rm -rf target
+          python3 tools/generate_build_files.py --check
           mcpp --version | grep -F "${MCPP_VERSION}"
           mcpp build --strict --no-cache
       - name: Unit and repository checks
         env:
           LLAMACPP_REQUIRE_BUILD_HELPER: "1"
         run: python3 -m unittest discover -s tests/unit -p 'test_*.py' -v
+      - name: Actual default project template
+        run: python3 tools/test_template.py --toolchain llvm@23.1.3
       - name: Verify vendored upstream and generated API
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -146,6 +153,10 @@ jobs:
             throw "CPU pass marker missing"
           }
 
+      - name: Actual template GGUF decode
+        shell: bash
+        run: python3 tools/test_template.py --run-arg "$RUNNER_TEMP/stories15M.gguf"
+
   linux-arm64:
     runs-on: ubuntu-24.04-arm
     steps:
@@ -191,16 +202,11 @@ jobs:
               test_bin=$(find target -type f -path "*/bin/cpu_decode" -print -quit)
               test -x "${helper}"
               test -n "${test_bin}"
-              for binary in "${helper}" "${test_bin}"; do
-                file "${binary}" | tee /tmp/file.log
-                grep -F "ARM aarch64" /tmp/file.log
-                grep -F "statically linked" /tmp/file.log
-                if readelf -l "${binary}" | grep -q INTERP; then
-                  echo "PT_INTERP present in ${binary}"
-                  exit 1
-                fi
-                echo "PT_INTERP absent in ${binary}"
-              done
+              # Current mcpp may bind a dynamic managed glibc runtime.
+              # Validate PT_INTERP and every loaded path, rather than assuming
+              # the host helper and target must both have a static file label.
+              python3 tools/check_native_runtime.py --home "${MCPP_HOME}" \
+                --arch "ARM aarch64" "${helper}" "${test_bin}"
 
               test -f compile_commands.json
               grep -F "/arch/arm/quants.c" compile_commands.json
@@ -273,6 +279,20 @@ jobs:
       MCPP_HOME: /tmp/llamacpp-vulkan-mcpp-home
     steps:
       - uses: actions/checkout@v4
+      - name: Checkout the candidate runtime adapter metadata
+        uses: actions/checkout@v4
+        with:
+          repository: mcpplibs/mcpp-index
+          ref: ${{ env.VULKAN_INDEX_COMMIT }}
+          path: .candidate-index
+      - name: Route Vulkan dependencies through the candidate index
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+          with Path("mcpp.toml").open("a", encoding="utf-8") as manifest:
+              manifest.write('\n[indices]\ncompat = { path = ' + json.dumps(Path(".candidate-index").resolve().as_posix()) + ' }\n')
+          PY
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -423,4 +443,4 @@ jobs:
           # moved to upstream's checkpoint (mcpp-index#163).
           tag=$(sed -n 's/^version *= *"\(.*\)"/\1/p' mcpp.toml | head -1)
           echo "release contract for tag: $tag"
-          python3 tools/check_release.py --tag "$tag"
+          python3 tools/check_release.py --tag "mwrap-$tag"

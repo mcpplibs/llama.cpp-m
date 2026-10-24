@@ -12,9 +12,8 @@ The wrapper and upstream project have separate identities:
   own. See "Version Model" below for why that replaced a separate semantic
   version.
 - Every wrapper release maps to exactly one upstream tag and commit.
-- The package coordinate is `ggml-org:llamacpp`; consumers use
-  `import llamacpp;`. The namespace names whose library this is — llama.cpp is
-  ggml-org's — rather than who packaged it (see mcpp-index#163).
+- The package coordinate is `mcpplibs.mwrap.llamacpp`; consumers use
+  `import mcpplibs.mwrap.llamacpp;`. The wrapper belongs to the mwrap category; the vendored upstream remains ggml-org/llama.cpp.
 - mcpp-index points only to immutable `llama.cpp-m` releases, never a moving
   upstream branch.
 
@@ -190,7 +189,7 @@ No release claims all upstream models merely because the API compiled.
 5. Verify the tag, version, lock, vendored source, exports, and snapshot:
 
    ```bash
-   python3 tools/check_release.py --tag v<version>
+   python3 tools/check_release.py --tag mwrap-<version>
    ```
 
 6. Create an immutable wrapper tag and release only after all gates pass.

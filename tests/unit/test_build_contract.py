@@ -78,7 +78,7 @@ class BuildManifestContract(unittest.TestCase):
         # The namespace names whose library this is (mcpp-index#163); the version
         # IS the upstream checkpoint, so it must agree with the build info the
         # manifest generates for ggml.
-        self.assertEqual(package["namespace"], "ggml-org")
+        self.assertEqual(package["namespace"], "mcpplibs.mwrap")
 
         # THE VERSION AND GGML_VERSION ARE TWO FACTS, AND A WRAPPER REVISION
         # SEPARATES THEM. The package version may carry a dotted revision for a
