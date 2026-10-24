@@ -2,11 +2,18 @@
 
 > 通过 C++23 模块使用固定的 llama.cpp b10069，保留上游 API 名称。
 
-[English](README.md) · **简体中文** · 上游：[ggml-org/llama.cpp](https://github.com/ggml-org/llama.cpp) · [Releases](https://github.com/mcpplibs/llama.cpp-m/releases) · [mcpp](https://github.com/mcpp-community/mcpp) · [Index](https://github.com/mcpplibs/mcpp-index)
+[English](README.md) · **简体中文** · [Upstream](https://github.com/ggml-org/llama.cpp) · [Releases](https://github.com/mcpplibs/llama.cpp-m/releases) · [mcpp](https://github.com/mcpp-community/mcpp) · [Index](https://github.com/mcpplibs/mcpp-index)
 
 [![C++23](https://img.shields.io/badge/C%2B%2B-23-blue.svg)](https://en.cppreference.com/w/cpp/23)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![CI](https://github.com/mcpplibs/llama.cpp-m/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/mcpplibs/llama.cpp-m/actions/workflows/ci.yml)
+
+## 模块
+
+- `import mcpplibs.mwrap.llamacpp;`: llama.cpp 模型、上下文与推理 API
+- `import mcpplibs.mwrap.llamacpp.macros;`: 类型化宏常量
+
+> More Modules API -> [模块与 API](docs/usage.md)
 
 ## 添加依赖
 

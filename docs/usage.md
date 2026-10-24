@@ -93,7 +93,7 @@ mcpp run -- /path/to/model.gguf \
   'User: Introduce yourself in one sentence.\nAssistant:'
 ```
 
-It sets `n_gpu_layers = 0`, imports `llamacpp`, and performs real
+It sets `n_gpu_layers = 0`, imports `mcpplibs.mwrap.llamacpp`, and performs real
 tokenization, decode, and sampling.
 
 ## Metal Chat Example
