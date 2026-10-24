@@ -13,7 +13,7 @@ The wrapper and upstream project have separate identities:
   version.
 - Every wrapper release maps to exactly one upstream tag and commit.
 - The package coordinate is `ggml-org:llamacpp`; consumers use
-  `import llamacpp;`. The namespace names whose library this is — llama.cpp is
+  `import mcpplibs.mwrap.llamacpp;`. The namespace names whose library this is — llama.cpp is
   ggml-org's — rather than who packaged it (see mcpp-index#163).
 - mcpp-index points only to immutable `llama.cpp-m` releases, never a moving
   upstream branch.

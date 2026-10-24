@@ -48,6 +48,14 @@ class CheckReleaseTest(unittest.TestCase):
             "178a6c44937154dc4c4eff0d166f4a044c4fceba",
         )
 
+    def test_mwrap_first_release_has_independent_tag_namespace(self):
+        manifest = self.root / "mcpp.toml"
+        manifest.write_text(manifest.read_text().replace('[package]', '[package]\nnamespace = "mcpplibs.mwrap"'))
+        identity = check_release.load_identity(self.root, "mwrap-b10069")
+        self.assertEqual(str(identity.version), "b10069")
+        with self.assertRaisesRegex(ValueError, "tag.*version"):
+            check_release.load_identity(self.root, "b10069")
+
     def test_rejects_tag_version_mismatch(self):
         with self.assertRaisesRegex(ValueError, "tag.*version"):
             check_release.load_identity(self.root, "b10069.1")

@@ -6,11 +6,11 @@ Detailed usage and background. See the [README](../README.md) for the current ca
 module for mcpp. The public module is:
 
 ```cpp
-import llamacpp;
+import mcpplibs.mwrap.llamacpp;
 ```
 
 The package version IS llama.cpp's build number, plus this packaging's own
-revision of it: `b10069.3`. CPU is the default backend; Metal is an additive
+revision of it: `b10069`. CPU is the default backend; Metal is an additive
 feature for macOS ARM64 and Vulkan an additive feature for Linux. Consumers pin
 exactly -- `b10069` is not semver, so no range expresses "b10069 or later" --
 which means a consumer wanting a feature names the revision that has it.
@@ -18,31 +18,31 @@ which means a consumer wanting a feature names the revision that has it.
 
 ## Add The Package
 
-After `b10069.3` is published in mcpp-index:
+After `b10069` is published in mcpp-index:
 
 ```bash
-mcpp add ggml-org:llamacpp@b10069.3
+mcpp add ggml-org:llamacpp@b10069
 ```
 
 The equivalent manifest entry is:
 
 ```toml
-[dependencies.ggml-org]
-llamacpp = "b10069.3"
+[dependencies.mcpplibs.mwrap]
+llamacpp = "b10069"
 ```
 
 For Metal on macOS ARM64:
 
 ```toml
-[dependencies.ggml-org]
-llamacpp = { version = "b10069.3", features = ["backend-metal"] }
+[dependencies.mcpplibs.mwrap]
+llamacpp = { version = "b10069", features = ["backend-metal"] }
 ```
 
 For Vulkan on Linux:
 
 ```toml
-[dependencies.ggml-org]
-llamacpp = { version = "b10069.3", features = ["backend-vulkan"] }
+[dependencies.mcpplibs.mwrap]
+llamacpp = { version = "b10069", features = ["backend-vulkan"] }
 ```
 
 That line is the whole diff. The shader compiler, the Khronos loader, the
@@ -55,7 +55,7 @@ either.
 
 ```cpp
 import std;
-import llamacpp;
+import mcpplibs.mwrap.llamacpp;
 
 int main() {
     llama_backend_init();
@@ -219,9 +219,9 @@ before the tokens are compared.
 
 ## Supported Boundary
 
-`b10069.3` includes:
+`b10069` includes:
 
-- the public llama.cpp C API exposed through `import llamacpp;`;
+- the public llama.cpp C API exposed through `import mcpplibs.mwrap.llamacpp;`;
 - the CPU backend on Linux x86_64, Linux ARM64, Windows x86_64, and macOS ARM64;
 - the Metal backend on macOS ARM64;
 - the Vulkan backend on Linux, under `backend-vulkan`, with a libstdc++
@@ -240,10 +240,10 @@ for exact evidence and remaining release gates.
 
 ## Quickstart project template
 
-The b10069.3 package adds a runnable default template. After that version is indexed:
+The b10069 package adds a runnable default template. After that version is indexed:
 
 ```sh
-mcpp new my-llama --template ggml-org.llamacpp@b10069.3
+mcpp new my-llama --template mcpplibs.mwrap.llamacpp@b10069
 cd my-llama
 mcpp run
 ```

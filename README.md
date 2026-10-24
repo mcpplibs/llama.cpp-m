@@ -1,48 +1,53 @@
 # llama.cpp-m
 
-llama.cpp **b10069** as a C++23 module, preserving the upstream C API through `import llamacpp;`.
+> Pinned llama.cpp b10069 through C++23 modules; upstream API names are preserved.
 
-## Quick start
+**English** · [简体中文](README.zh.md)
 
-Use mcpp **2026.10.24.1**. The candidate revision below requires index publication.
+Use mcpp **2026.10.24.1**. The new mwrap identity becomes installable after index publication.
+
+## Add The Package
 
 ```sh
-mcpp new inference --template ggml-org.llamacpp@b10069.3
-cd inference
+mcpp new llama_app --template mcpplibs.mwrap.llamacpp@b10069
+cd llama_app
 mcpp run
 ```
 
-The default run initializes the CPU backend without downloading a model.
-Use `mcpp run -- /path/to/model.gguf` to decode a small batch and sample a token.
-
-## Existing projects
-
 ```toml
 [dependencies]
-"ggml-org.llamacpp" = "b10069.3"
+mcpplibs.mwrap.llamacpp = "b10069"
 ```
+
+## Minimal CPU Program
 
 ```cpp
-import std;
-import llamacpp;
-int main() {
-    llama_backend_init();
-    std::println("{}", llama_print_system_info());
-    llama_backend_free();
-}
+import mcpplibs.mwrap.llamacpp;
+int main() { llama_backend_init(); llama_backend_free(); }
 ```
 
-Pin the exact build key; `b10069.3` is an upstream build identifier with a wrapper revision.
+The default template checks CPU initialization without downloading a model.
 
-## Scope
+## CPU Chat Example
 
-CPU: Linux x86_64/arm64, Windows x86_64 and macOS arm64.
-`backend-metal` adds Metal on macOS arm64; `backend-vulkan` adds Vulkan on Linux with libstdc++.
-Vulkan with libc++ is refused for the documented upstream incomplete-type issue.
+```sh
+cd examples/chat-cpu
+mcpp run -- /path/to/model.gguf "Hello"
+```
 
-CUDA, mtmd, RPC and other backends are outside this checkpoint. Model coverage is documented separately.
+A compatible local GGUF model is required for tokenization, decode and sampling.
 
-## Documentation
+## Metal Chat Example
 
-[Usage and backends](docs/usage.md) · [CPU chat](examples/chat-cpu) ·
-[Update policy](docs/upstream-update-policy.md) · [Validation](docs/validation/b10069.md) · [MIT](LICENSE)
+Use `backend-metal` on macOS ARM64; [the example](examples/chat-metal) requires actual offload and Metal buffers.
+
+## Vulkan Chat Example
+
+Use `backend-vulkan` on Linux. [The example](examples/chat-vulkan) rejects silent CPU fallback.
+Shader generation, libstdc++ constraints and driver boundaries are in [usage](docs/usage.md).
+
+## Supported Boundary
+
+Pin `b10069` exactly; it is not a semver range. `.macros` exposes mapped constants.
+Model quality and unsupported GPU configurations are not implied by the CPU template.
+[Upstream policy](docs/upstream-update-policy.md) · [Validation](docs/validation/b10069.md) · [MIT](LICENSE)

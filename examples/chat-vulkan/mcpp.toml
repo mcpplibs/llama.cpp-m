@@ -13,4 +13,4 @@ kind = "bin"
 main = "src/main.cpp"
 
 [dependencies]
-llamacpp = { path = "../..", features = ["backend-vulkan"] }
+"mcpplibs.mwrap.llamacpp" = { path = "../..", features = ["backend-vulkan"] }

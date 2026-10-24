@@ -1,24 +1,16 @@
-name: release
-
+name: Release
 on:
   push:
-    # The tag IS the package version, which is upstream's build number
-    # (`b10069`), optionally with a wrapper revision (`b10069.1`) — see
-    # docs/upstream-update-policy.md. `v*` was the third place the old
-    # semantic-version scheme was written down, and it silently did not fire.
-    tags: ["b[0-9]*"]
-
+    tags: ["mwrap-*"]
 permissions:
   contents: read
-
 jobs:
-  verify:
-    runs-on: ubuntu-24.04
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
+      contents: write
       actions: read
-      contents: read
-    outputs:
-      mapping: ${{ steps.contract.outputs.mapping }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -26,62 +18,36 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Check tag, upstream version and bilingual entry pages
+        run: python3 tools/check_mwrap_release.py --tag "$GITHUB_REF_NAME"
       - name: Run complete unit suite
         run: python3 -m unittest discover -s tests/unit -p 'test_*.py' -v
-      - name: Verify immutable release contract
-        id: contract
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          mapping=$(python3 tools/check_release.py --tag "${GITHUB_REF_NAME}" | tail -n 1)
-          echo "${mapping}"
-          echo "mapping=${mapping}" >> "${GITHUB_OUTPUT}"
-      - name: Require latest successful CI run for the tag commit
+      - name: Verify immutable upstream release mapping
+        run: python3 tools/check_release.py --tag "$GITHUB_REF_NAME"
+      - name: Require latest successful source CI
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          output="${RUNNER_TEMP}/ci-runs.json"
-          downloaded=0
-          for attempt in 1 2 3 4 5; do
-            if gh api \
-              "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs?head_sha=${GITHUB_SHA}&per_page=100" \
-              > "${output}"; then
-              downloaded=1
-              break
-            fi
-            if [[ "${attempt}" -lt 5 ]]; then sleep $((attempt * 2)); fi
-          done
-          if [[ "${downloaded}" -ne 1 ]]; then
-            echo "failed to query CI workflow runs after 5 attempts"
-            exit 1
-          fi
-          python3 tools/check_ci_run.py --runs "${output}" --sha "${GITHUB_SHA}"
-
-  publish:
-    needs: verify
-    runs-on: ubuntu-24.04
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Create release notes for the immutable tag archive
+          gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs?head_sha=${GITHUB_SHA}&per_page=100" > "$RUNNER_TEMP/ci-runs.json"
+          python3 tools/check_ci_run.py --runs "$RUNNER_TEMP/ci-runs.json" --sha "$GITHUB_SHA"
+      - name: Build immutable source asset and publish
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_MAPPING: ${{ needs.verify.outputs.mapping }}
         shell: bash
         run: |
           set -euo pipefail
-          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
-            echo "release ${GITHUB_REF_NAME} already exists; refusing to mutate it"
-            exit 1
+          version="${GITHUB_REF_NAME#mwrap-}"
+          repo="${GITHUB_REPOSITORY#*/}"
+          asset="${repo}-${version}.tar.gz"
+          git archive --format=tar.gz --prefix="${repo}-${version}/" "$GITHUB_SHA" > "$RUNNER_TEMP/$asset"
+          (cd "$RUNNER_TEMP" && sha256sum "$asset" > "$asset.sha256")
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo 'Release already exists; refusing to change immutable assets'; exit 1
           fi
-          gh release create "${GITHUB_REF_NAME}" \
-            --verify-tag \
-            --title "llama.cpp-m ${GITHUB_REF_NAME#v}" \
-            --notes "${RELEASE_MAPPING}"
+          extra=()
+          if [[ "$version" == *-rc* ]]; then extra+=(--prerelease); fi
+          gh release create "$GITHUB_REF_NAME" "$RUNNER_TEMP/$asset" "$RUNNER_TEMP/$asset.sha256" \
+            --repo "$GITHUB_REPOSITORY" --verify-tag --title "$repo $version" \
+            --notes "Module wrapper for upstream $version. New mwrap package identities become installable after mcpp-index publication; see the bilingual README for the tested support scope." "${extra[@]}"

@@ -19,6 +19,9 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+      - name: Mwrap identity and bilingual README contract
+        run: python3 tools/check_mwrap_release.py
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -440,4 +443,4 @@ jobs:
           # moved to upstream's checkpoint (mcpp-index#163).
           tag=$(sed -n 's/^version *= *"\(.*\)"/\1/p' mcpp.toml | head -1)
           echo "release contract for tag: $tag"
-          python3 tools/check_release.py --tag "$tag"
+          python3 tools/check_release.py --tag "mwrap-$tag"

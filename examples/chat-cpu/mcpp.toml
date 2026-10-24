@@ -8,4 +8,4 @@ kind = "bin"
 main = "src/main.cpp"
 
 [dependencies]
-llamacpp = { path = "../.." }
+"mcpplibs.mwrap.llamacpp" = { path = "../.." }

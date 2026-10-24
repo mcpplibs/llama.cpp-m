@@ -1,5 +1,5 @@
 import std;
-import llamacpp;
+import mcpplibs.mwrap.llamacpp;
 
 struct Backend {
     Backend() { llama_backend_init(); }
