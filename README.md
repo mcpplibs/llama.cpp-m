@@ -4,7 +4,7 @@
 
 **English** · [简体中文](README.zh.md)
 
-Use mcpp **2026.10.24.1**. The new mwrap identity becomes installable after index publication.
+Upstream: [ggml-org/llama.cpp](https://github.com/ggml-org/llama.cpp)
 
 ## Add The Package
 
