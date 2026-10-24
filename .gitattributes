@@ -1,1 +1,4 @@
 third_party/llama.cpp/** -whitespace
+
+# Preserve upstream document bytes and original whitespace on every platform.
+upstream/** -text -whitespace
