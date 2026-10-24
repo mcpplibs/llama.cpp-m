@@ -19,7 +19,7 @@ module;
 #undef LLAMA_STATE_SEQ_FLAGS_ON_DEVICE
 
 export module mcpplibs.mwrap.llamacpp;
+export import mcpplibs.mwrap.llamacpp.macros;
 
 #include "gen_exports/required_ggml.inc"
 #include "gen_exports/llama.inc"
-export import mcpplibs.mwrap.llamacpp.macros;
