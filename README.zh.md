@@ -5,7 +5,8 @@
 [English](README.md) · **简体中文** · [Upstream](https://github.com/ggml-org/llama.cpp) · [Releases](https://github.com/mcpplibs/llama.cpp-m/releases) · [mcpp](https://github.com/mcpp-community/mcpp) · [Index](https://github.com/mcpplibs/mcpp-index)
 
 [![C++23](https://img.shields.io/badge/C%2B%2B-23-blue.svg)](https://en.cppreference.com/w/cpp/23)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![mcpp-community](https://img.shields.io/badge/mcpp--community-mwrap-blue)](https://github.com/mcpp-community)
 [![CI](https://github.com/mcpplibs/llama.cpp-m/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/mcpplibs/llama.cpp-m/actions/workflows/ci.yml)
 
 ## 模块
@@ -59,4 +60,6 @@ shader 生成、libstdc++ 限制及驱动边界见[使用说明](docs/usage.md)�
 
 精确固定 `b10069`，不使用 semver 范围；`.macros` 导出映射常量。
 CPU 模板通过不代表模型质量或未支持 GPU 配置通过。
-[上游策略](docs/upstream-update-policy.md) · [验证](docs/validation/b10069.md) · [MIT](LICENSE)
+[上游策略](docs/upstream-update-policy.md) · [验证](docs/validation/b10069.md) · [Apache-2.0](LICENSE)
+
+封装：Apache-2.0，mcpp-community。[上游原始 README 与许可证](upstream/llama.cpp/)，上游许可保持原样。
