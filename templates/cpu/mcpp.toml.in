@@ -4,4 +4,4 @@ version = "0.1.0"
 description = "llama.cpp CPU quickstart"
 
 [dependencies]
-"{{self.name}}" = "{{self.version}}"
+{{self.name}} = "{{self.version}}"

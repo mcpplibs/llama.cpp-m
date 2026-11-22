@@ -243,7 +243,7 @@ for exact evidence and remaining release gates.
 The b10069 package adds a runnable default template. After that version is indexed:
 
 ```sh
-mcpp new my-llama --template mcpplibs.mwrap.llamacpp@b10069
+mcpp new my-llama --template mcpplibs.mwrap.llamacpp@b10069.1
 cd my-llama
 mcpp run
 ```
