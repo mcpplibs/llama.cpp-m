@@ -63,6 +63,9 @@ Every release records:
 - material API, model, and backend changes.
 
 Published tags, archives, and index entries are immutable.
+`mwrap-b10069.1` was tagged but never released, because its release gate ran
+on a changed runner image; `b10069.2` carries the same template change (the
+dependency selector written unquoted).
 
 ## Cadence And Triggers
 

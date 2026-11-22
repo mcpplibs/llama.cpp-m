@@ -14,7 +14,7 @@ revision of it: `b10069`. CPU is the default backend; Metal is an additive
 feature for macOS ARM64 and Vulkan an additive feature for Linux. Consumers pin
 exactly -- `b10069` is not semver, so no range expresses "b10069 or later" --
 which means a consumer wanting a feature names the revision that has it.
-`backend-vulkan` arrived in `b10069.1`.
+`backend-vulkan` arrived in the legacy `ggml-org.llamacpp` `b10069.1`.
 
 ## Add The Package
 
@@ -243,7 +243,7 @@ for exact evidence and remaining release gates.
 The b10069 package adds a runnable default template. After that version is indexed:
 
 ```sh
-mcpp new my-llama --template mcpplibs.mwrap.llamacpp@b10069.1
+mcpp new my-llama --template mcpplibs.mwrap.llamacpp@b10069.2
 cd my-llama
 mcpp run
 ```
