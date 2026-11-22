@@ -19,14 +19,14 @@
 ## Add The Package
 
 ```sh
-mcpp new llama_app --template mcpplibs.mwrap.llamacpp@b10069
+mcpp new llama_app --template mcpplibs.mwrap.llamacpp@b10069.1
 cd llama_app
 mcpp run
 ```
 
 ```toml
 [dependencies]
-mcpplibs.mwrap.llamacpp = "b10069"
+mcpplibs.mwrap.llamacpp = "b10069.1"
 ```
 
 ## Minimal CPU Program
@@ -58,7 +58,7 @@ Shader generation, libstdc++ constraints and driver boundaries are in [usage](do
 
 ## Supported Boundary
 
-Pin `b10069` exactly; it is not a semver range. `.macros` exposes mapped constants.
+Pin `b10069.1` exactly; it is not a semver range. `.macros` exposes mapped constants.
 Model quality and unsupported GPU configurations are not implied by the CPU template.
 [Upstream policy](docs/upstream-update-policy.md) · [Validation](docs/validation/b10069.md) · [Apache-2.0](LICENSE)
 

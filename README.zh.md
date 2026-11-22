@@ -19,14 +19,14 @@
 ## 添加依赖
 
 ```sh
-mcpp new llama_app --template mcpplibs.mwrap.llamacpp@b10069
+mcpp new llama_app --template mcpplibs.mwrap.llamacpp@b10069.1
 cd llama_app
 mcpp run
 ```
 
 ```toml
 [dependencies]
-mcpplibs.mwrap.llamacpp = "b10069"
+mcpplibs.mwrap.llamacpp = "b10069.1"
 ```
 
 ## 最小 CPU 程序
@@ -58,7 +58,7 @@ shader 生成、libstdc++ 限制及驱动边界见[使用说明](docs/usage.md)�
 
 ## 支持边界
 
-精确固定 `b10069`，不使用 semver 范围；`.macros` 导出映射常量。
+精确固定 `b10069.1`，不使用 semver 范围；`.macros` 导出映射常量。
 CPU 模板通过不代表模型质量或未支持 GPU 配置通过。
 [上游策略](docs/upstream-update-policy.md) · [验证](docs/validation/b10069.md) · [Apache-2.0](LICENSE)
 
